@@ -1,0 +1,670 @@
+from spym.common.Utils import *
+from spym.common.InstEncoder import InstructionEncoder
+from spym.vm.RegBank import RegisterBank
+import re
+import pdb
+
+class InstBuilder(object):
+	class InvalidRegisterName(Exception):
+		pass
+		
+	class WrongArgumentCount(Exception):
+		pass
+		
+	class UnknownInstruction(Exception):
+		pass
+		
+	class InvalidParameter(Exception):
+		pass
+		
+	def __init__(self):
+		self.encoder = InstructionEncoder()
+		
+	def __checkArguments(self, args, count):
+		if len(args) != count:
+			raise self.WrongArgumentCount
+			
+	def parseAddress(self, addr):
+		if not isinstance(addr, str):
+			raise self.InvalidParameter
+			
+		paren_match = re.match(r'(-?\w+)\((\$.*?)\)', addr)
+		if not paren_match:
+			raise self.InvalidParameter("Expected address definition in the form of 'immediate($register)'.")
+			
+		try:
+			immediate = int(paren_match.group(1), 0)
+			register = self.parseRegister(paren_match.group(2))
+		except ValueError:
+			raise self.InvalidParameter("Error when parsing composite address '%s': Invalid immediate value." % addr)
+		except self.InvalidRegisterName:
+			raise self.InvalidParameter("Error when parsing composite address '%s': Invalid register value." % addr)
+			
+		return (immediate, register)
+		
+		
+	def buildFunction(self, func, args):
+		return getattr(self, 'ins_' + func)(*args)
+		
+	def completeFunction(self, func, labels):
+		data = func._inst_bld_tmp
+		label = data[2]
+		
+		if label not in labels:
+			return False
+		
+		func.label_address = labels[label]
+		
+		if data[0] == 'jump':
+			func.func_dict['mem_content'] = self.encoder(data[1], u32(func.label_address >> 2))
+		elif data[0] == 'branch': # TODO: encoding for branch instructions
+			func.func_dict['mem_content'] = 0xFFFFFFFF #self.encoder(data[1], func.label_address)
+		
+		del(func.func_dict['_inst_bld_tmp'])
+		return True
+
+############################################################
+###### Templates
+############################################################
+	def arith_TEMPLATE(self, func_name, args, _lambda_f):
+		self.__checkArguments(args, 3)
+		
+		des = self.parseRegister(args[0])
+		src1 = self.parseRegister(args[1])
+		src2 = self.parseRegister(args[2])
+		
+		def _asm_arith(b): 
+			b[des] = _lambda_f(b[src1], b[src2])
+			
+		_asm_arith.func_dict['mem_content'] = self.encoder(func_name, src1 = src1, src2 = src2, des = des)
+		
+		return _asm_arith
+		
+	def shift_TEMPLATE(self, func_name, args, shift_imm, _lambda_f):
+		self.__checkArguments(args, 3)
+		
+		des = self.parseRegister(args[0])
+		src1 = self.parseRegister(args[1])
+		
+		if shift_imm:
+			shift = int(args[2], 0)
+			encoding = self.encoder(func_name, src1 = src1, src2 = 0, des = des, shift = shift)
+			
+		else:
+			shift = self.parseRegister(args[2])
+			encoding = self.encoder(func_name, src1 = src1, src2 = shift, des = des)
+			
+		def _asm_shift(b):
+			b[des] = _lambda_f(b[src1], shift)
+			
+		_asm_shift.func_dict['mem_content'] = encoding
+		
+		return _asm_shift
+		
+		
+	def imm_TEMPLATE(self, func_name, args, _lambda_f):
+		self.__checkArguments(args, 3)
+			
+		des = self.parseRegister(args[0])
+		src1 = self.parseRegister(args[1])
+
+		try:
+			immediate = int(args[2], 0)
+		except ValueError:
+			raise self.InvalidParameter
+
+		def _asm_imm(b):
+			b[des] = _lambda_f(b[src1], immediate)
+			
+		_asm_imm.func_dict['mem_content'] = self.encoder(func_name, src1 = src1, des = des, imm = immediate)
+
+		return _asm_imm
+		
+	def branch_TEMPLATE(self, func_name, label, a, b, _lambda_f, link = False):
+		src1 = self.parseRegister(a) if a else None
+		src2 = self.parseRegister(b) if b else None
+
+		def _asm_branch(b):
+			if _lambda_f(b[src1], b[src2]):
+				if link: b[31] = b.PC
+				b.PC = _asm_branch.label_address
+				
+		_asm_branch.func_dict['label_address'] = None
+		_asm_branch.func_dict['_inst_bld_tmp'] = ('branch', func_name, label, src1, src2)
+
+		return _asm_branch
+		
+	def storeload_TEMPLATE(self, func_name, args, size, unsigned = False):
+		self.__checkArguments(args, 2)
+		
+		imm, memory_addr_reg = self.parseAddress(args[1])
+		register = self.parseRegister(args[0])
+		
+		_sign_f = (lambda i, size: i) if unsigned else extsgn
+		
+		if func_name[0] == 'l': # load instruction
+			def _asm_storeload(b):
+				b[register] = _sign_f(b.memory[(imm + s32(b[memory_addr_reg])), size], size)
+		elif func_name[0] == 's': # store instruction
+			def _asm_storeload(b):
+				b.memory[(imm + s32(b[memory_addr_reg])), size] = b[register]
+				
+		_asm_storeload.func_dict['mem_content'] = self.encoder(func_name, src1 = memory_addr_reg, des = register, imm = imm)
+		
+		return _asm_storeload
+		
+############################################################
+###### Integer arithmetic
+############################################################			
+	def ins_add(self, args, unsigned = False):
+		"""
+			Opcode: 100000
+			Syntax: ArithLog
+		"""
+		add_name = 'addu' if unsigned else 'add'
+		add_func = (lambda a, b: a + b) if unsigned else (lambda a, b: s32(a) + s32(b))
+		
+		return self.arith_TEMPLATE(add_name, args, add_func)
+		
+	def ins_addu(self, args):
+		"""
+			Opcode: 100001
+			Syntax: ArithLog
+		"""
+		return self.ins_add(args, True)
+		
+	def ins_addi(self, args):
+		"""
+			Opcode: 001000
+			Syntax: ArithLogI
+		"""
+		return self.imm_TEMPLATE('addi', args, lambda a, b: s32(a) + b)
+
+	def ins_addiu(self, args):
+		"""
+			Opcode: 001001
+			Syntax: ArithLogI
+		"""
+		return self.imm_TEMPLATE('addiu', args, lambda a, b: u32(a) + b)
+		
+	def ins_div(self, args, unsigned = False):
+		"""
+			Opcode: 011010
+			Syntax: DivMult
+		"""
+		self.__checkArguments(args, 2)
+		
+		sign = u32 if unsigned else s32
+		div_name = 'divu' if unsigned else 'div'
+		 
+		src1 = self.parseRegister(args[0])
+		src2 = self.parseRegister(args[1])
+
+		def _asm_div(b):
+			b.HI = sign(b[src1]) % sign(b[src2])
+			b.LO = sign(b[src1]) // sign(b[src2])
+			
+		_asm_div.func_dict['mem_content'] = self.encoder(div_name, src1 = src1, src2 = src2)
+
+		return _asm_div
+	
+	def ins_divu(self, args):
+		"""
+			Opcode: 011011
+			Syntax: DivMult
+		"""
+		return self.ins_div(args, True)
+
+	def ins_mult(self, args, unsigned = False):
+		"""
+			Opcode: 011000
+			Syntax: DivMult
+		"""
+		self.__checkArguments(args, 2)
+		
+		sign = u32 if unsigned else s32
+		mult_name = 'multu' if unsigned else 'mult'
+		
+		src1 = self.parseRegister(args[0])
+		src2 = self.parseRegister(args[1])
+	
+		def _asm_mult(b):
+			result = sign(b[src1]) * sign(b[src2])
+			b.HI = (result >> 32) & 0xFFFFFFFF
+			b.LO = result & 0xFFFFFFFF
+			
+		_asm_mult.func_dict['mem_content'] = self.encoder(mult_name, src1 = src1, src2 = src2)
+				
+		return _asm_mult
+		
+	def ins_multu(self, args):
+		"""
+			Opcode: 011001
+			Syntax: DivMult
+		"""
+		return self.ins_mult(args, True)
+		
+	def ins_sub(self, args, unsigned = False):
+		"""
+			Opcode: 100010
+			Syntax: ArithLog
+		"""
+		sub_name = 'subu' if unsigned else 'sub'
+		sub_func = (lambda a, b: a - b) if unsigned else (lambda a, b: s32(a) - s32(b))
+		
+		return self.arith_TEMPLATE(sub_name, args, sub_func)
+
+	def ins_subu(self, args):
+		"""
+			Opcode: 100011
+			Syntax: ArithLog
+		"""
+		return self.ins_sub(args, True)			
+			
+############################################################
+###### Bitwise logic
+############################################################	
+	def ins_and(self, args):
+		"""
+			Opcode: 100100
+			Syntax: ArithLog
+		"""
+		return self.arith_TEMPLATE('and', args, lambda a, b: a & b)
+		
+	def ins_andi(self, args):
+		"""
+			Opcode: 001100
+			Syntax: ArithLogI
+		"""
+		return self.imm_TEMPLATE('andi', args, lambda a, b: a & b)
+		
+	def ins_nor(self, args):
+		"""
+			Opcode: 100111
+			Syntax: ArithLog
+		"""
+		return self.arith_TEMPLATE('nor', args, lambda a, b: ~(a | b))
+	
+	def ins_or(self, args):
+		"""
+			Opcode: 100101
+			Syntax: ArithLog
+		"""
+		return self.arith_TEMPLATE('or', args, lambda a, b: a | b)
+
+	def ins_ori(self, args):
+		"""
+			Opcode: 001101
+			Syntax: ArithLogI
+		"""
+		return self.imm_TEMPLATE('ori', args, lambda a, b: a | b)
+		
+	def ins_xor(self, args):
+		"""
+			Opcode: 100110
+			Syntax: ArithLog
+		"""
+		return self.arith_TEMPLATE('xor', args, lambda a, b: a ^ b)
+	
+	def ins_xori(self, args):
+		"""
+			Opcode: 001110
+			Syntax: ArithLogI
+		"""
+		return self.imm_TEMPLATE('xori', args, lambda a, b: a ^ b)
+	
+############################################################
+###### Bitwise shifts
+############################################################
+# shifts with immediate
+	def ins_sll(self, args):
+		"""
+			Opcode: 000000
+			Syntax: Shift
+		"""
+		return self.shift_TEMPLATE('sll', args, True, lambda a, b: a << b)
+	
+	def ins_srl(self, args):
+		"""
+			Opcode: 000010
+			Syntax: Shift
+		"""
+		return self.shift_TEMPLATE('srl', args, True, lambda a, b: a >> b)
+		
+	def ins_sra(self, args):
+		"""
+			Opcode: 000011
+			Syntax: Shift
+		"""
+		return self.shift_TEMPLATE('sra', args, True, lambda a, b: s32(a) >> b)
+
+# shifts with register
+	def ins_sllv(self, args):
+		"""
+			Opcode: 000100
+			Syntax: ShiftV
+		"""
+		return self.shift_TEMPLATE('sllv', args, False, lambda a, b: a << b)
+
+	def ins_srlv(self, args):
+		"""
+			Opcode: 000110
+			Syntax: ShiftV
+		"""
+		return self.shift_TEMPLATE('srlv', args, False, lambda a, b: a >> b)
+
+	def ins_srav(self, args):
+		"""
+			Opcode: 000111
+			Syntax: ShiftV
+		"""
+		return self.shift_TEMPLATE('srav', args, False, lambda a, b: s32(a) >> b)
+		
+
+############################################################
+###### Set-if
+############################################################		
+	def ins_slt(self, args):
+		"""
+			Opcode: 101010
+			Syntax: ArithLog
+		"""
+		return self.arith_TEMPLATE('slt', args, lambda a, b: 1 if s32(a) < s32(b) else 0)
+		
+	def ins_sltu(self, args):
+		"""
+			Opcode: 101001
+			Syntax: ArithLog
+		"""
+		return self.arith_TEMPLATE('sltu', args, lambda a, b: 1 if u32(a) < u32(b) else 0)
+		
+	def ins_sltiu(self, args):
+		"""
+			Opcode: 001001
+			Syntax: ArithLogI
+		"""
+		return self.imm_TEMPLATE('sltiu', args, lambda a, b: 1 if u32(a) < b else 0)
+		
+	def ins_slti(self, args):
+		"""
+			Opcode: 001010
+			Syntax: ArithLog
+		"""
+		return self.imm_TEMPLATE('slti', args, lambda a, b: 1 if s32(a) < b else 0)
+
+
+############################################################
+###### Branching
+############################################################
+# FIXME: apparently it is a pseudo-inst
+#	def ins_b(self, args):
+#		self.__checkArguments(args, 1)
+#		return self.branch_TEMPLATE('b', args[0], None, None, lambda a, b: True)
+		
+	def ins_beq(self, args):
+		"""
+			Opcode: 000100
+			Syntax: Branch
+		"""
+		self.__checkArguments(args, 3)
+		return self.branch_TEMPLATE('beq', args[2], args[0], args[1], lambda a, b: a == b)
+		
+	def ins_bne(self, args):
+		"""
+			Opcode: 000101
+			Syntax: Branch
+		"""
+		self.__checkArguments(args, 3)
+		return self.branch_TEMPLATE('bne', args[2], args[0], args[1], lambda a, b: a != b)
+		
+	def ins_bgez(self, args):
+		self.__checkArguments(args, 2)
+		return self.branch_TEMPLATE('bgez', args[1], args[0], None, lambda a, b: a >= 0)
+		
+	def ins_bgezal(self, args):
+		self.__checkArguments(args, 2)
+		return self.branch_TEMPLATE('bgez', args[1], args[0], None, lambda a, b: a >= 0, True)
+		
+	def ins_bgtz(self, args):
+		"""
+			Opcode: 000111
+			Syntax: BranchZ
+		"""
+		self.__checkArguments(args, 2)
+		return self.branch_TEMPLATE('bgtz', args[1], args[0], None, lambda a, b: a > 0)
+
+# FIXME: apparently not implemented in standard MIPS R2000		
+#	def ins_bgtzal(self, args):
+#		self.__checkArguments(args, 2)
+#		return self.branch_TEMPLATE('bgtz', args[1], args[0], None, lambda a, b: a > 0, True)
+		
+	def ins_blez(self, args):
+		"""
+			Opcode: 000110
+			Syntax: BranchZ
+		"""
+		self.__checkArguments(args, 2)
+		return self.branch_TEMPLATE('blez', args[1], args[0], None, lambda a, b: a <= 0)
+
+	def ins_bltz(self, args):
+		self.__checkArguments(args, 2)
+		return self.branch_TEMPLATE('bltz', args[1], args[0], None, lambda a, b: a < 0)
+
+	def ins_bltzal(self, args):
+		self.__checkArguments(args, 2)
+		return self.branch_TEMPLATE('bltz', args[1], args[0], None, lambda a, b: a < 0, True)
+
+
+############################################################
+###### Memory/data loading
+############################################################
+	def ins_lui(self, args):
+		"""
+			Opcode: 001111
+			Syntax: LoadI
+		"""
+		self.__checkArguments(args, 1)
+		des = self.parseRegister(args[0])
+		
+		try:
+			value = int(args[2], 0) & 0xFFFF
+		except ValueError:
+			raise self.InvalidParameter
+		
+		def _asm_lui(b):
+			b[des] = (value << 16)
+			
+		_asm_lui.func_dict['mem_content'] = self.encoder('lui', des = des, imm = value)
+			
+		return _asm_lui
+		
+	def ins_lb(self, args):
+		"""
+			Opcode: 100000
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('lb', args, 1)
+		
+	def ins_lbu(self, args):
+		"""
+			Opcode: 100100
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('lbu', args, 1, True)
+		
+	def ins_lh(self, args):
+		"""
+			Opcode: 100001
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('lh', args, 2)
+		
+	def ins_lhu(self, args):
+		"""
+			Opcode: 100101
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('lhu', args, 2, True)
+		
+	def ins_lw(self, args):
+		"""
+			Opcode: 100011
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('lw', args, 4)
+	
+	def ins_sb(self, args):
+		"""
+			Opcode: 101000
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('sb', args, 1)
+		
+	def ins_sh(self, args):
+		"""
+			Opcode: 101001
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('sh', args, 2)
+
+	def ins_sw(self, args):
+		"""
+			Opcode: 101011
+			Syntax: LoadStore
+		"""
+		return self.storeload_TEMPLATE('sw', args, 4)
+
+############################################################
+###### Jumps
+############################################################
+
+	def ins_j(self, args, link = False):
+		"""
+			Opcode: 000010
+			Syntax: Jump
+		"""
+		self.__checkArguments(args, 1)
+		label = args[0]
+		
+		jmp_name = 'jal' if link else 'j'
+		
+		def _asm_j(b):
+			if link: b[31] = b.PC
+			b.PC = _asm_j.label_address
+			
+		_asm_j.func_dict['label_address'] = None
+		_asm_j.func_dict['_inst_bld_tmp'] = ('jump', jmp_name, label)
+			
+		return _asm_j
+		
+	def ins_jr(self, args, link = False):
+		"""
+			Opcode: 001000
+			Syntax: JumpR
+		"""
+		self.__checkArguments(args, 1)
+		src = self.parseRegister(args[0])
+		
+		jr_name = 'jalr' if link else 'jr'
+		
+		def _asm_jr(b):
+			if link: b[31] = b.PC
+			b.PC = b[src]
+		
+		_asm_jr.func_dict['mem_content'] = self.encoder(jr_name, src1 = src)
+		
+		return _asm_jr
+		
+	def ins_jal(self, args):
+		"""
+			Opcode: 000011
+			Syntax: Jump
+		"""
+		return self.ins_j(args, True)
+
+	def ins_jalr(self, args):
+		"""
+			Opcode: 001001
+			Syntax: JumpR
+		"""
+		return self.ins_jr(args, True)
+
+############################################################
+###### Special register movement
+############################################################
+	def ins_mflo(self, args):
+		"""
+			Opcode: 010010
+			Syntax: MoveFrom
+		"""
+		self.__checkArguments(args, 1)
+		des = self.parseRegister(args[0])
+		
+		def _asm_mflo(b):
+			b[des] = b.LO
+			
+		return _asm_mflo
+		
+	def ins_mfhi(self, args):
+		"""
+			Opcode: 010000
+			Syntax: MoveFrom
+		"""
+		self.__checkArguments(args, 1)
+		des = self.parseRegister(args[0])
+
+		def _asm_mfhi(b):
+			b[des] = b.HI
+
+		return _asm_mfhi
+		
+	def ins_mtlo(self, args):
+		"""
+			Opcode: 010011
+			Syntax: MoveTo
+		"""
+		self.__checkArguments(args, 1)
+		src = self.parseRegister(args[0])
+
+		def _asm_mtlo(b):
+			b.LO = b[src]
+
+		return _asm_mtlo
+		
+	def ins_mthi(self, args):
+		"""
+			Opcode: 010001
+			Syntax: MoveTo
+		"""
+		self.__checkArguments(args, 1)
+		src = self.parseRegister(args[0])
+
+		def _asm_mthi(b):
+			b.HI = b[src]
+
+		return _asm_mthi
+		
+############################################################
+###### Kernel/misc instructions
+############################################################ 
+	def ins_nop(self, args):
+		"""
+			Opcode: 000000
+			Syntax: None
+		"""
+		self.__checkArguments(args, 0)
+		
+		def _asm_nop(b):
+			pass
+		
+		_asm_nop.func_dict['mem_content'] = 0x0
+		return _asm_nop
+		
+	def ins_syscall(self, args):
+		self.__checkArguments(args, 0)
+		
+		def _asm_syscall(b):
+			pass
+		
+		_asm_syscall.func_dict['mem_content'] = self.encoder('syscall')
+		return _asm_syscall
