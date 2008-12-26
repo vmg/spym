@@ -75,8 +75,8 @@ class InstructionEncoder(object):
 	class EncodingError(Exception):
 		pass
 		
-	def __init__(self):
-		pass
+	def __init__(self, builder):
+		self.builder = builder
 		
 	def __encode_R(self, s, t, d, a, f):
 		return "000000" + bin(s, 5) + bin(t, 5) + bin(d, 5) + bin(a, 5) + f
@@ -87,16 +87,29 @@ class InstructionEncoder(object):
 	def __encode_J(self, o, i):
 		return o + bin(i, 26)
 		
-	def __call__(self, ins_name, src1 = 0, src2 = 0, des = 0, shift = 0, imm = 0):
+	def encodeBinary(self, encoding, opcode, src1, src2, des, shift, imm):
+		if encoding == 'R':
+			str_encoding = self.__encode_R(src1, src2, des, shift, opcode)
+		elif encoding == 'I':
+			str_encoding = self.__encode_I(opcode, src1, des, imm)
+		elif encoding == 'J':
+			str_encoding = self.__encode_J(opcode, imm)
 		
-		if ins_name in self.INSTRUCTIONS_R:
-			str_encoding = self.__encode_R(src1, src2, des, shift, self.OPCODES[ins_name])
-		elif ins_name in self.INSTRUCTIONS_I:
-			str_encoding = self.__encode_I(self.OPCODES[ins_name], src1, des, imm)
-		elif ins_name in self.INSTRUCTIONS_J:
-			str_encoding = self.__encode_J(self.OPCODES[ins_name], imm)
-		else:
-			raise self.EncodingError("Undefined instruction: '%s'" % ins_name)
-			
 		return int(str_encoding, 2) & 0xFFFFFFFF
+
+	def encodeText(self, ins_name, syntax, s, t, d, a, imm):
+		pass
+		
+	def __call__(self, ins_name, src1 = 0, src2 = 0, des = 0, shift = 0, imm = 0):
+		ins_data = getattr(self.builder, 'ins_' + ins_name)
+		
+		binary_encoding = self.encodeBinary(ins_data.encoding, ins_data.opcode, src1, src2, des, shift, imm)
+		
+		# if hasattr(ins_data, 'syntax'):
+		# 	syntax = ins_data.syntax
+		# text_encoding = self.encodeText(ins_data.syntax)
+		
+		return binary_encoding
+			
+		
 		

@@ -7,28 +7,19 @@ from spym.common.InstEncoder import InstructionEncoder
 
 class TestInstructionEncoding(unittest.TestCase):
 	def setUp(self):
-		self.encoder = InstructionEncoder()
+		self.builder = InstBuilder()
 		
 	def testAllPossibleEncodings(self):
-		for ins in dir(InstBuilder):
+		for ins in dir(self.builder):
 			ins = ins.split('_')
 			if len(ins) == 2 and ins[0] == 'ins':
-				self.encoder(ins[1])
+				self.builder.encoder(ins[1])
 				
-	def testInstArrayConsistency(self):
-		list_len = (len(InstructionEncoder.INSTRUCTIONS_R) + 
-					len(InstructionEncoder.INSTRUCTIONS_J) +
-					len(InstructionEncoder.INSTRUCTIONS_I))
-		
-		dict_len = len(InstructionEncoder.OPCODES)
-		
-		self.assertEqual(list_len, dict_len)
-		
-	def testMissingInstImplementations(self):
-		for ins in InstructionEncoder.OPCODES.keys():
-			if not hasattr(InstBuilder, 'ins_' + ins):
-				self.fail("Missing instruction implementation: '%s'" % ins)
-				
-
+	def testMetaDataGeneration(self):				
+		for ins in dir(self.builder):
+			if ins.startswith('ins_'):
+				func = getattr(self.builder, ins)
+				self.assertEqual(func.opcode, InstructionEncoder.OPCODES[ins[4:]], "Opcode difference in instruction %s" % ins)
+			
 if __name__ == '__main__':
 	unittest.main()

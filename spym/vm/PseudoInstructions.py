@@ -14,7 +14,7 @@ class PseudoInstBuilder(InstBuilder):
 		
 	def imm_pins_TEMPLATE(self, args, imm_parameter):
 		try:
-			self.parseRegister(args[imm_parameter])
+			self._parseRegister(args[imm_parameter])
 		except self.InvalidParameter:
 			immediate = int(args[imm_parameter])
 			args[imm_parameter] = '$1'
