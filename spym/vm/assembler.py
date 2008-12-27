@@ -26,10 +26,9 @@ OTHER DEALINGS IN THE SOFTWARE.
 from __future__ import with_statement
 
 import re
-from spym.vm.Preprocessor import AssemblyPreprocessor
-
-from spym.vm.Instructions import InstructionAssembler
-from spym.vm.PseudoInstructions import PseudoInstructionAssembler
+from spym.vm.preprocessor import AssemblyPreprocessor
+from spym.vm.instructions import InstructionAssembler
+from spym.vm.pseudoinstructions import PseudoInstructionAssembler
 	
 class AssemblyParser(object):
 	"""Core for the assembly parsing routines."""

@@ -26,8 +26,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm.Memory import MemoryManager
-from spym.vm.Parser import AssemblyParser
+from spym.vm import MemoryManager, AssemblyParser
 
 class TestParser(unittest.TestCase):
 	def setUp(self):

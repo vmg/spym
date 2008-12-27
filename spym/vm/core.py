@@ -26,10 +26,10 @@ OTHER DEALINGS IN THE SOFTWARE.
 import os.path
 import time
 
-from spym.vm.Memory import MemoryManager
-from spym.vm.Parser import AssemblyParser
-from spym.vm.RegBank import RegisterBank
-from spym.vm.ExceptionHandler import EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
+from spym.vm.memory import MemoryManager
+from spym.vm.assembler import AssemblyParser
+from spym.vm.regbank import RegisterBank
+from spym.vm.exceptions import EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
 
 class VirtualMachine(object):
 	

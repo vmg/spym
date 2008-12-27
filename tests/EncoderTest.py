@@ -26,8 +26,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm.Instructions import InstructionAssembler
-from spym.common.InstEncoder import InstructionEncoder
+from spym.vm import InstructionAssembler
+from spym.common.encoder import InstructionEncoder
 
 
 class TestInstructionEncoding(unittest.TestCase):

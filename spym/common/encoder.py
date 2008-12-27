@@ -23,7 +23,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 
-from spym.common.Utils import *
+from spym.common.utils import *
 
 class InstructionEncoder(object):	
 	class EncodingError(Exception):

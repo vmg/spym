@@ -24,9 +24,9 @@ OTHER DEALINGS IN THE SOFTWARE.
 """""
 
 import re
-from spym.common.InstEncoder import InstructionEncoder
-from spym.vm.RegBank import RegisterBank
-from spym.vm.ExceptionHandler import MIPS_Exception
+from spym.common.encoder import InstructionEncoder
+from spym.vm.regbank import RegisterBank
+from spym.vm.exceptions import MIPS_Exception
 
 from spym.common.Utils import *
 

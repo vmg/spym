@@ -26,11 +26,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm.Instructions import InstructionAssembler
-from spym.vm.RegBank import RegisterBank
-from spym.vm.Memory import MemoryManager
-from spym.vm.ExceptionHandler import MIPS_Exception
-from spym.common.Utils import *
+from spym.vm import InstructionAssembler, RegisterBank, MemoryManager, MIPS_Exception
+from spym.common.utils import *
 
 class TestInstructionClosures(unittest.TestCase):
 	def setUp(self):

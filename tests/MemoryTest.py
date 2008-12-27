@@ -26,8 +26,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm.Memory import MemoryManager
-from spym.vm.ExceptionHandler import MIPS_Exception
+from spym.vm import MemoryManager, MIPS_Exception
 
 class TestMemoryManager(unittest.TestCase):
 	def setUp(self):
