@@ -26,13 +26,13 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm.Instructions import InstBuilder
+from spym.vm.Instructions import InstructionAssembler
 from spym.common.InstEncoder import InstructionEncoder
 
 
 class TestInstructionEncoding(unittest.TestCase):
 	def setUp(self):
-		self.builder = InstBuilder()
+		self.builder = InstructionAssembler()
 		
 	# def testAllPossibleEncodings(self):
 	# 	for ins in dir(self.builder):

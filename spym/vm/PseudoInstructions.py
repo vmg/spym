@@ -23,9 +23,9 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 
-from spym.vm.Instructions import InstBuilder
+from spym.vm.Instructions import InstructionAssembler
 
-class PseudoInstBuilder(InstBuilder):
+class PseudoInstructionAssembler(InstructionAssembler):
 	
 	IMM_PSEUDOINS = {
 		'add' 	: 2, 	'addu' 	: 2,	
@@ -49,12 +49,12 @@ class PseudoInstBuilder(InstBuilder):
 	def __call__(self, func, args):
 		if func in self.IMM_PSEUDOINS:
 			args, _asm_immFunc = self.imm_pins_TEMPLATE(args, self.IMM_PSEUDOINS[func])
-			return _asm_immFunc + [InstBuilder.__call__(self, func, args),]
+			return _asm_immFunc + [InstructionAssembler.__call__(self, func, args),]
 			
 		if hasattr(self, 'pins_' + func):
 			return getattr(self, 'pins_' + func)(args)
 			
-		return InstBuilder.__call__(self, func, args)
+		return InstructionAssembler.__call__(self, func, args)
 
 	def pins_abs(self, args): # (x ^ (x>>31)) - (x>>31)
 		return [
@@ -65,12 +65,12 @@ class PseudoInstBuilder(InstBuilder):
 		
 	def pins_div(self, args, unsigned = False):
 		if len(args) == 2:
-			return InstBuilder.ins_div(self, args, unsigned)
+			return InstructionAssembler.ins_div(self, args, unsigned)
 			
 		args, _asm_immFunc = self.imm_pins_TEMPLATE(args, 2)
 		
 		return _asm_immFunc + [
-			InstBuilder.ins_div(self, args[1:], unsigned), # do the normal division with src1 and src2
+			InstructionAssembler.ins_div(self, args[1:], unsigned), # do the normal division with src1 and src2
 			self.ins_mflo([args[0]]),				 # move from LO to des the result	
 		]
 		
@@ -114,7 +114,7 @@ class PseudoInstBuilder(InstBuilder):
 			upper = (immediate >> 16) & 0xFFFF
 			
 		except ValueError:
-			raise InstBuilder.InvalidParameter("Invalid immediate value.")
+			raise InstructionAssembler.InvalidParameter("Invalid immediate value.")
 			
 		if upper:
 			return [

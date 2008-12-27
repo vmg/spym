@@ -28,8 +28,8 @@ from __future__ import with_statement
 import re
 from spym.vm.Preprocessor import AssemblyPreprocessor
 
-from spym.vm.Instructions import InstBuilder
-from spym.vm.PseudoInstructions import PseudoInstBuilder
+from spym.vm.Instructions import InstructionAssembler
+from spym.vm.PseudoInstructions import PseudoInstructionAssembler
 	
 class AssemblyParser(object):
 	"""Core for the assembly parsing routines."""
@@ -46,7 +46,7 @@ class AssemblyParser(object):
 		self.memory = vm_memory
 		
 		self.preprocessor = AssemblyPreprocessor(self, vm_memory)
-		self.instruction_assembler = PseudoInstBuilder() if enablePseudoInsts else InstBuilder()
+		self.instruction_assembler = PseudoInstructionAssembler() if enablePseudoInsts else InstructionAssembler()
 		self.global_labels = {}
 		self.labels = {}
 		

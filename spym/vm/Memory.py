@@ -22,6 +22,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
+from spym.vm.ExceptionHandler import MIPS_Exception
 
 class MemoryManager(object):
 	SEGMENT_DATA = {
@@ -95,10 +96,10 @@ class MemoryManager(object):
 		
 	def __getData(self, address, size, binary = True):
 		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-			raise self.vm.MIPS_Exception('ADDRL', badaddr = address)
+			raise MIPS_Exception('ADDRL', badaddr = address)
 			
-		if self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
-			raise self.vm.MIPS_Exception('ADDRL', badaddr = address) # FIXME: is this the right exception?
+		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
+			raise MIPS_Exception('ADDRL', badaddr = address) # FIXME: is this the right exception?
 		
 		if not self.__contains__(address):
 			return 0x0
@@ -109,10 +110,10 @@ class MemoryManager(object):
 		
 	def __setData(self, address, size, data):
 		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-			raise self.vm.MIPS_Exception('ADDRS', badaddr = address)
+			raise MIPS_Exception('ADDRS', badaddr = address)
 			
-		if self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
-			raise self.vm.MIPS_Exception('ADDRS', badaddr = address) # FIXME: is this the right exception?
+		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
+			raise MIPS_Exception('ADDRS', badaddr = address) # FIXME: is this the right exception?
 		
 		if not self.__contains__(address):
 			self.__allocate(address)

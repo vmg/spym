@@ -1,4 +1,8 @@
-
+class MIPS_Exception(Exception):
+	def __init__(self, code, int_id = None, badaddr = None):
+		self.code = code
+		self.int_id = int_id
+		self.badaddr = badaddr
 
 EXCEPTION_HANDLER_ADDR = 0x80000080
 

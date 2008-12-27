@@ -29,7 +29,7 @@ import time
 from spym.vm.Memory import MemoryManager
 from spym.vm.Parser import AssemblyParser
 from spym.vm.RegBank import RegisterBank
-from spym.vm.ExceptionHandler import EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR
+from spym.vm.ExceptionHandler import EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
 
 class VirtualMachine(object):
 	
@@ -51,12 +51,6 @@ class VirtualMachine(object):
 	
 	class RuntimeVMException(Exception):
 		pass
-		
-	class MIPS_Exception(Exception):
-		def __init__(self, code, int_id = None, badaddr = None):
-			self.code = code
-			self.int_id = int_id
-			self.badaddr = badaddr
 		
 	def __init__(self, assembly, exceptionHandler = None, loadAsBuffer = False, enablePseudoInsts = True, memoryBlockSize = 32):
 		self.enablePseudoInsts = enablePseudoInsts
@@ -81,7 +75,7 @@ class VirtualMachine(object):
 			self.regBank.CP0.Count += 1
 			if self.regBank.CP0.Count == self.regBank.CP0.Compare:
 				self.regBank.CP0.Count = 0
-				raise self.MIPS_Exception('INT', int_id = 5)
+				raise MIPS_Exception('INT', int_id = 5)
 		
 	def run(self):
 		self.parser.resolveGlobalDependencies()
@@ -111,7 +105,7 @@ class VirtualMachine(object):
 				if oldPC == self.regBank.PC:
 					self.regBank.PC += 0x4
 				
-			except self.MIPS_Exception, cur_exception:
+			except MIPS_Exception, cur_exception:
 				self.processException(cur_exception)
 				
 	def processException(self, exception):

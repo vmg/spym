@@ -26,10 +26,11 @@ OTHER DEALINGS IN THE SOFTWARE.
 import re
 from spym.common.InstEncoder import InstructionEncoder
 from spym.vm.RegBank import RegisterBank
+from spym.vm.ExceptionHandler import MIPS_Exception
 
 from spym.common.Utils import *
 
-class InstBuilder(object):
+class InstructionAssembler(object):
 	
 	SYNTAX_DATA = {            
 	    'arithlog'  :	('R', "$d, $s, $t"	),
@@ -192,8 +193,8 @@ class InstBuilder(object):
 		def _asm_arith(b): 
 			result = _lambda_f(b[reg_s], b[reg_t])
 			
-			if overflow and result & (1 << 32):
-				raise VirtualMachine.MIPS_Exception('OVF')
+#			if overflow and result & (1 << 32):
+#				raise MIPS_Exception('OVF')
 				
 			b[reg_d] = result
 			
@@ -313,7 +314,7 @@ class InstBuilder(object):
 			try:
 				b.LO, b.HI = divmod(sign(b[reg_s]), sign(b[reg_t]))
 			except ZeroDivisionError:
-				raise VirtualMachine.MIPS_Exception('OVF')
+				raise MIPS_Exception('OVF')
 			
 		self.encoder(_asm_div, div_name, t = reg_t, s = reg_s)
 

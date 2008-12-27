@@ -26,9 +26,10 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm.Instructions import InstBuilder
+from spym.vm.Instructions import InstructionAssembler
 from spym.vm.RegBank import RegisterBank
 from spym.vm.Memory import MemoryManager
+from spym.vm.ExceptionHandler import MIPS_Exception
 from spym.common.Utils import *
 
 class TestInstructionClosures(unittest.TestCase):
@@ -47,7 +48,7 @@ class TestInstructionClosures(unittest.TestCase):
 		self.bank[9] = 0x0010
 		self.bank[10] = 0x0020
 		
-		self.ib = InstBuilder()
+		self.ib = InstructionAssembler()
 	
 	def testParameterCount(self):
 		argList1 = ['$3']
@@ -56,26 +57,26 @@ class TestInstructionClosures(unittest.TestCase):
 		argList4 = ['$1', '$2', '$3', '$4']
 		
 		# integer-arithmetical
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList2)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList4)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'addu', argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList4)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'div', argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'div', argList3)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'mult', argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'mult', argList3)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'sub', argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'sub', argList4)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'add', argList1)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'add', argList2)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'add', argList4)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'addu', argList1)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'add', argList4)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'div', argList1)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'div', argList3)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'mult', argList1)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'mult', argList3)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'sub', argList1)
+		self.assertRaises(InstructionAssembler.WrongArgumentCount, self.ib, 'sub', argList4)
 		
 	def testLoadStoreInstructions(self):
 		# check for parameter correctness
-		self.assertRaises(InstBuilder.InvalidParameter, self.ib.ins_sw, ['$3', 'lol($30)'])
-		self.assertRaises(InstBuilder.InvalidParameter, self.ib.ins_sh, ['$4', '00a($ra)'])
-		self.assertRaises(InstBuilder.InvalidParameter, self.ib.ins_lw, ['$5', '01($ro)'])
-		self.assertRaises(InstBuilder.InvalidParameter, self.ib.ins_lb, ['$6', '000005(30)'])
-		self.assertRaises(InstBuilder.InvalidRegisterName, self.ib.ins_sw, ['$ras', '14($30)'])
-		self.assertRaises(InstBuilder.InvalidRegisterName, self.ib.ins_sw, ['ras', '1($30)'])
+		self.assertRaises(InstructionAssembler.InvalidParameter, self.ib.ins_sw, ['$3', 'lol($30)'])
+		self.assertRaises(InstructionAssembler.InvalidParameter, self.ib.ins_sh, ['$4', '00a($ra)'])
+		self.assertRaises(InstructionAssembler.InvalidParameter, self.ib.ins_lw, ['$5', '01($ro)'])
+		self.assertRaises(InstructionAssembler.InvalidParameter, self.ib.ins_lb, ['$6', '000005(30)'])
+		self.assertRaises(InstructionAssembler.InvalidRegisterName, self.ib.ins_sw, ['$ras', '14($30)'])
+		self.assertRaises(InstructionAssembler.InvalidRegisterName, self.ib.ins_sw, ['ras', '1($30)'])
 		
 		self.ib.ins_sw(['$1', '0($9)'])(self.bank)
 		self.assertEqual(self.memory[0x0010, 4], 0xFFFF)
@@ -90,13 +91,13 @@ class TestInstructionClosures(unittest.TestCase):
 		self.assertEqual(self.memory[0x000C, 4], 0xABAB)
 		
 		unaligned_closure = self.ib.ins_sw(['$1', '1($9)'])
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, unaligned_closure, self.bank)
+		self.assertRaises(MIPS_Exception, unaligned_closure, self.bank)
 		
 		unaligned_closure = self.ib.ins_sw(['$1', '2($9)'])
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, unaligned_closure, self.bank)
+		self.assertRaises(MIPS_Exception, unaligned_closure, self.bank)
 		
 		unaligned_closure = self.ib.ins_sw(['$1', '-1($9)'])
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, unaligned_closure, self.bank)
+		self.assertRaises(MIPS_Exception, unaligned_closure, self.bank)
 		
 		# self.ib.ins_sw(['$1', '0($9)'])(self.bank)
 		# self.assertEqual(memory[0x0010, 4], 0xFFFF)

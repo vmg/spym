@@ -26,13 +26,12 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm.VirtualMachine import VirtualMachine
 from spym.vm.Memory import MemoryManager
+from spym.vm.ExceptionHandler import MIPS_Exception
 
 class TestMemoryManager(unittest.TestCase):
 	def setUp(self):
-		self.vm = VirtualMachine("", loadAsBuffer = True)
-		self.memory = self.vm.memory
+		self.memory = MemoryManager(None, 32)
 		self.memory.clear()
 		
 	def testInnerConsistency(self):
@@ -60,19 +59,19 @@ class TestMemoryManager(unittest.TestCase):
 		self.assertEqual(self.memory[0x0002], 0x0A0A)
 		
 	def testMemoryBounds(self):
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.__getitem__, 0xFFFFFFFF0)
+		self.assertRaises(MIPS_Exception, self.memory.__getitem__, 0xFFFFFFFF0)
 		self.assertEqual(self.memory[0xFFFFFFFF], 0)
 		
 	def testAlignmentChecks(self):
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getWord, 0x0003)
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getWord, 0x0002)
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getHalf, 0x0003)
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getWord, 0x0001)
+		self.assertRaises(MIPS_Exception, self.memory.getWord, 0x0003)
+		self.assertRaises(MIPS_Exception, self.memory.getWord, 0x0002)
+		self.assertRaises(MIPS_Exception, self.memory.getHalf, 0x0003)
+		self.assertRaises(MIPS_Exception, self.memory.getWord, 0x0001)
 		
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setWord, 0x0003, 0xFFFF)
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setWord, 0x0002, 0xFFFF)
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setHalf, 0x0003, 0xFFFF)
-		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setWord, 0x0001, 0xFFFF)
+		self.assertRaises(MIPS_Exception, self.memory.setWord, 0x0003, 0xFFFF)
+		self.assertRaises(MIPS_Exception, self.memory.setWord, 0x0002, 0xFFFF)
+		self.assertRaises(MIPS_Exception, self.memory.setHalf, 0x0003, 0xFFFF)
+		self.assertRaises(MIPS_Exception, self.memory.setWord, 0x0001, 0xFFFF)
 		
 		self.assertEqual(self.memory.getWord(0x0000), 0)
 		self.assertEqual(self.memory.getHalf(0x0002), 0)
