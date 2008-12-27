@@ -82,3 +82,6 @@ class RegisterBank(object):
 			
 	def __setitem__(self, item, value):
 		if item: self.std_registers[item] = value & 0xFFFFFFFF
+		
+	def __str__(self):
+		pass

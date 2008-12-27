@@ -117,3 +117,4 @@ class AssemblyParser(object):
 					line_args = re.split(self.TOKENIZER_REGEX, line_tokens[1])
 		
 		return (line_label, line_id, line_args)
+		

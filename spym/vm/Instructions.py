@@ -739,3 +739,4 @@ class InstBuilder(object):
 		
 		self.encoder(_asm_syscall, 'syscall')
 		return _asm_syscall
+		
