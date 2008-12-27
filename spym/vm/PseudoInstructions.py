@@ -102,4 +102,3 @@ class PseudoInstBuilder(InstBuilder):
 				self.ins_ori([args[0], '$0', str(lower)]),
 			]
 			
-˝
