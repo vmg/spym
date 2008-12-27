@@ -55,7 +55,8 @@ class VirtualMachine(object):
 #			print "Running instruction %s at %s" % (str(instruction), str(self.regBank.PC))
 			
 			if not instruction:
-				raise self.RuntimeVMException("Attempted to execute non-instruction at %08X" % self.regBank.PC)
+				break
+#				raise self.RuntimeVMException("Attempted to execute non-instruction at %08X" % self.regBank.PC)
 				
 			try:
 				if (time.clock() - timer) * 1000 >= 10.0:

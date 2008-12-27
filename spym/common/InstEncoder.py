@@ -1,77 +1,6 @@
 from spym.common.Utils import *
 
-class InstructionEncoder(object):
-	
-	INSTRUCTIONS_R = [
-		'add', 'addu', 'and', 'div', 'divu', 'mult', 'multu', 'nor', 
-		'or', 'ori', 'sll', 'sllv', 'sra', 'srav', 'srl', 'srlv', 'sub', 
-		'subu', 'xor', 'xori', 'slt', 'sltu', 'jalr', 'jr', 'mfhi',
-		'mflo', 'mthi', 'mtlo', 'syscall', 'nop']
-		
-	INSTRUCTIONS_I = [
-		'addi', 'addiu', 'andi', 'lui', 'slti', 'sltiu', 'beq', 
-		'bgtz', 'blez', 'bgez', 'bne', 'lb', 'lbu', 'lh', 'lhu', 'lw', 'sb', 
-		'bgezal', 'bltzal', 'bltz', 'sh', 'sw']
-		
-	INSTRUCTIONS_J = ['j', 'jal']
-	
-	OPCODES = {
-		'add'	: '100000',
-		'addu'	: '100001',
-		'addi'	: '001000',
-		'addiu' : '001001',
-		'and'   : '100100',
-		'andi'  : '001100',
-		'div'   : '011010',
-		'divu'  : '011011',
-		'mult'  : '011000',
-		'multu' : '011001',
-		'nor'   : '100111',
-		'or'    : '100101',
-		'ori'   : '001101',  
-		'sll'   : '000000',  
-		'sllv'  : '000100',
-		'sra'   : '000011',  
-		'srav'  : '000111',
-		'srl'   : '000010',  
-		'srlv'  : '000110',
-		'sub'   : '100010',  
-		'subu'  : '100011',
-		'xor'   : '100110',  
-		'xori'  : '001110',
-		'lui'	: '001111',
-		'slt'   : '101010',  
-		'sltu'  : '101001',
-		'slti'  : '001010',
-		'sltiu' : '001001',
-		'beq'   : '000100',
-		'bgez'	: '000001', 
-		'bgezal': '000001',
-		'bltzal': '000001',
-		'bltz'	: '000001',
-		'bgtz'  : '000111',
-		'blez'  : '000110',
-		'bne'   : '000101',
-		'j'     : '000010',
-		'jal'   : '000011',  
-		'jalr'  : '001001',
-		'jr'    : '001000',
-		'lb'    : '100000',  
-		'lbu'   : '100100',  
-		'lh'    : '100001',  
-		'lhu'   : '100101',  
-		'lw'    : '100011',  
-		'sb'    : '101000',  
-		'sh'    : '101001',  
-		'sw'    : '101011',  
-		'mfhi'  : '010000',
-		'mflo'  : '010010',
-		'mthi'  : '010001',
-		'mtlo'  : '010011',
-		'syscall': '100110',
-		'nop'	: '000000'
-	}
-	
+class InstructionEncoder(object):	
 	class EncodingError(Exception):
 		pass
 		
@@ -87,29 +16,39 @@ class InstructionEncoder(object):
 	def __encode_J(self, o, i):
 		return o + bin(i, 26)
 		
-	def encodeBinary(self, encoding, opcode, src1, src2, des, shift, imm):
+	def encodeBinary(self, encoding, opcode, s, t, d, shift, imm):
 		if encoding == 'R':
-			str_encoding = self.__encode_R(src1, src2, des, shift, opcode)
+			str_encoding = self.__encode_R(s, t, d, shift, opcode)
 		elif encoding == 'I':
-			str_encoding = self.__encode_I(opcode, src1, des, imm)
+			str_encoding = self.__encode_I(opcode, s, t, imm)
 		elif encoding == 'J':
 			str_encoding = self.__encode_J(opcode, imm)
+			
+		assert(len(str_encoding) == 32)
 		
 		return int(str_encoding, 2) & 0xFFFFFFFF
 
-	def encodeText(self, ins_name, syntax, s, t, d, a, imm):
-		pass
+	def encodeText(self, ins_name, encoding, syntax, s, t, d, a, imm, label):
+		if not syntax:
+			return ins_name.lower()
+			
+		if encoding == 'J':
+			imm = (imm << 2)
 		
-	def __call__(self, ins_name, src1 = 0, src2 = 0, des = 0, shift = 0, imm = 0):
+		syntax = syntax.replace('imm', r'%(imm)d').replace('label', r'0x%(imm)08X [%(label)s]')
+		syntax = syntax.replace('$d', r'$%(d)d').replace('$s', r'$%(s)d').replace('$t', r'$%(t)d')
+		syntax = syntax.replace('shift', r'%(a)d')
+		return ins_name.lower() + " " + syntax % {'s' : s, 't' : t, 'd' : d, 'a' : a, 'imm' : imm, 'label' : label}
+		
+		
+	def __call__(self, ins_closure, ins_name, s = 0, t = 0, d = 0, shift = 0, imm = 0, label = ""):
 		ins_data = getattr(self.builder, 'ins_' + ins_name)
 		
-		binary_encoding = self.encodeBinary(ins_data.encoding, ins_data.opcode, src1, src2, des, shift, imm)
+		binary_encoding = self.encodeBinary(ins_data.encoding, ins_data.opcode, s, t, d, shift, imm)
+		text_encoding = self.encodeText(ins_name, ins_data.encoding, ins_data.syntax, s, t, d, shift, imm, label)
 		
-		# if hasattr(ins_data, 'syntax'):
-		# 	syntax = ins_data.syntax
-		# text_encoding = self.encodeText(ins_data.syntax)
-		
-		return binary_encoding
+		ins_closure.func_dict['mem_content'] = binary_encoding
+		ins_closure.func_dict['text'] = text_encoding
 			
 		
 		

@@ -210,7 +210,10 @@ class MemoryManager(object):
 					if ins:
 						output += "[0x%08X]    " % (address + i * 4)
 						output += "0x%08X  " % ins.mem_content
-						output += "%s\n"	% ins.parsed_text
+						
+						text_output = ins.text.ljust(30) + "; " + ins.orig_text
+						output += text_output + "\n"
+						
 			elif isinstance(block, self.MemoryBlock):
 				data = block.contents
 				

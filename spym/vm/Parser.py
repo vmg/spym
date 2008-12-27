@@ -66,7 +66,7 @@ class AssemblyParser(object):
 					if not isinstance(inst_code, list):
 						inst_code = [inst_code, ]
 						
-					inst_code[0].func_dict['parsed_text'] = ""#identifier + " " + ", ".join(args)
+					inst_code[0].func_dict['orig_text'] = line.strip()
 					
 					for inst in inst_code:
 						if hasattr(inst, '_inst_bld_tmp'):

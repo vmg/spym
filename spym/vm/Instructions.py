@@ -1,15 +1,16 @@
+import re
+import pdb
+
 from spym.common.Utils import *
 from spym.common.InstEncoder import InstructionEncoder
 from spym.vm.RegBank import RegisterBank
-import re
-import pdb
 
 class InstBuilder(object):
 	
 	SYNTAX_DATA = {            
 	    'arithlog'  :	('R', "$d, $s, $t"	),
 	    'divmult'   :	('R', "$s, $t"		),
-	    'shift'    	:	('R', "$d, $t, a"	),
+	    'shift'    	:	('R', "$d, $t, shift"),
 	    'shiftv'  	:	('R', "$d, $t, $s"	),
 	    'jumpr'    	:	('R', "$s"			),
 	    'movefrom'	:	('R', "$d"			),
@@ -51,9 +52,10 @@ class InstBuilder(object):
 				if not func.__doc__:
 					raise self.SyntaxException("Missing syntax data for instruction '%s'." % func_name)
 					
-				encoding, argcount, opcode = self._parseSyntaxData(func_name, func.__doc__)
+				encoding, argcount, opcode, syntax = self._parseSyntaxData(func_name, func.__doc__)
 				func.func_dict['encoding'] = encoding
 				func.func_dict['opcode'] = opcode
+				func.func_dict['syntax'] = syntax
 				
 				if argcount is not None:
 					func.func_dict['argcount'] = argcount
@@ -75,14 +77,19 @@ class InstBuilder(object):
 			elif lname == "syntax":
 				if contents.lower() in self.SYNTAX_DATA:
 					encoding, syntax = self.SYNTAX_DATA[contents.lower()]
+			elif lname == 'encoding' and encoding is None:
+				encoding = contents
 
 		if opcode is None:
 			raise self.SyntaxException("Cannot resolve Opcode for instruction '%s'" % func_name)
 		
 		if encoding is None:
 			raise self.SyntaxException("Cannot resolve encoding type for instruction '%s'" % func_name)
+			
+		if syntax is None:
+			raise self.SyntaxException("Cannot find syntax information for instruction '%s'" % func_name)
 
-		return (encoding, argcount, opcode)
+		return (encoding, argcount, opcode, syntax)
 		
 	def __checkArguments(self, args, count):
 		if len(args) != count:
@@ -128,6 +135,8 @@ class InstBuilder(object):
 		
 	def completeFunction(self, func, labels):
 		data = func._inst_bld_tmp
+		
+		func_name = data[1]
 		label = data[2]
 		
 		if label not in labels:
@@ -136,9 +145,9 @@ class InstBuilder(object):
 		func.label_address = labels[label]
 		
 		if data[0] == 'jump':
-			func.func_dict['mem_content'] = self.encoder(data[1], u32(func.label_address >> 2))
+			self.encoder(func, func_name, imm = u32(func.label_address >> 2), label = label)
 		elif data[0] == 'branch': # TODO: encoding for branch instructions
-			func.func_dict['mem_content'] = 0xFFFFFFFF #self.encoder(data[1], func.label_address)
+			func.func_dict['mem_content'] = self.encoder(func, func_name, s = data[3], t = data[4], imm = 0xDEAD)
 		
 		del(func.func_dict['_inst_bld_tmp'])
 		return True
@@ -149,44 +158,43 @@ class InstBuilder(object):
 	def arith_TEMPLATE(self, func_name, args, _lambda_f):
 		self.__checkArguments(args, 3)
 		
-		des = self._parseRegister(args[0])
-		src1 = self._parseRegister(args[1])
-		src2 = self._parseRegister(args[2])
+		reg_d = self._parseRegister(args[0])
+		reg_s = self._parseRegister(args[1])
+		reg_t = self._parseRegister(args[2])
 		
 		def _asm_arith(b): 
-			b[des] = _lambda_f(b[src1], b[src2])
+			b[reg_d] = _lambda_f(b[reg_s], b[reg_t])
 			
-		_asm_arith.func_dict['mem_content'] = self.encoder(func_name, src1 = src1, src2 = src2, des = des)
-		
+		self.encoder(_asm_arith, func_name, d = reg_d, s = reg_s, t = reg_t)
 		return _asm_arith
 		
 	def shift_TEMPLATE(self, func_name, args, shift_imm, _lambda_f):
 		self.__checkArguments(args, 3)
 		
-		des = self._parseRegister(args[0])
-		src1 = self._parseRegister(args[1])
+		reg_d = self._parseRegister(args[0])
+		reg_t = self._parseRegister(args[1])
+		reg_s = 0
+		shift = 0
 		
 		if shift_imm:
 			shift = int(args[2], 0)
-			encoding = self.encoder(func_name, src1 = src1, src2 = 0, des = des, shift = shift)
-			
+			def _asm_shift(b):
+				b[reg_d] = _lambda_f(b[reg_t], shift)
+						
 		else:
-			shift = self._parseRegister(args[2])
-			encoding = self.encoder(func_name, src1 = src1, src2 = shift, des = des)
-			
-		def _asm_shift(b):
-			b[des] = _lambda_f(b[src1], shift)
-			
-		_asm_shift.func_dict['mem_content'] = encoding
+			reg_s = self._parseRegister(args[2])
+			def _asm_shift(b):
+				b[reg_d] = _lambda_f(b[reg_t], b[reg_s])
 		
+		self.encoder(_asm_shift, func_name, d = reg_d, t = reg_t, s = reg_s, shift = shift)
 		return _asm_shift
 		
 		
 	def imm_TEMPLATE(self, func_name, args, _lambda_f):
 		self.__checkArguments(args, 3)
 			
-		des = self._parseRegister(args[0])
-		src1 = self._parseRegister(args[1])
+		reg_t = self._parseRegister(args[0])
+		reg_s = self._parseRegister(args[1])
 
 		try:
 			immediate = int(args[2], 0)
@@ -194,43 +202,41 @@ class InstBuilder(object):
 			raise self.InvalidParameter
 
 		def _asm_imm(b):
-			b[des] = _lambda_f(b[src1], immediate)
+			b[reg_t] = _lambda_f(b[reg_s], immediate)
 			
-		_asm_imm.func_dict['mem_content'] = self.encoder(func_name, src1 = src1, des = des, imm = immediate)
-
+		self.encoder(_asm_imm, func_name, s = reg_s, t = reg_t, imm = immediate)
 		return _asm_imm
 		
-	def branch_TEMPLATE(self, func_name, label, a, b, _lambda_f, link = False):
-		src1 = self._parseRegister(a) if a else None
-		src2 = self._parseRegister(b) if b else None
+	def branch_TEMPLATE(self, func_name, label, s, t, _lambda_f, link = False):
+		reg_s = self._parseRegister(s)
+		reg_t = self._parseRegister(t) if isinstance(t, str) else t
 
 		def _asm_branch(b):
-			if _lambda_f(b[src1], b[src2]):
+			if _lambda_f(b[reg_s], b[reg_t]):
 				if link: b[31] = b.PC
 				b.PC = _asm_branch.label_address
 				
 		_asm_branch.func_dict['label_address'] = None
-		_asm_branch.func_dict['_inst_bld_tmp'] = ('branch', func_name, label, src1, src2)
+		_asm_branch.func_dict['_inst_bld_tmp'] = ('branch', func_name, label, reg_s, reg_t)
 
 		return _asm_branch
 		
 	def storeload_TEMPLATE(self, func_name, args, size, unsigned = False):
 		self.__checkArguments(args, 2)
 		
-		imm, memory_addr_reg = self.parseAddress(args[1])
-		register = self._parseRegister(args[0])
+		imm, reg_s = self.parseAddress(args[1])
+		reg_t = self._parseRegister(args[0])
 		
 		_sign_f = (lambda i, size: i) if unsigned else extsgn
 		
 		if func_name[0] == 'l': # load instruction
 			def _asm_storeload(b):
-				b[register] = _sign_f(b.memory[(imm + s32(b[memory_addr_reg])), size], size)
+				b[reg_t] = _sign_f(b.memory[(imm + s32(b[reg_s])), size], size)
 		elif func_name[0] == 's': # store instruction
 			def _asm_storeload(b):
-				b.memory[(imm + s32(b[memory_addr_reg])), size] = b[register]
+				b.memory[(imm + s32(b[reg_s])), size] = b[reg_t]
 				
-		_asm_storeload.func_dict['mem_content'] = self.encoder(func_name, src1 = memory_addr_reg, des = register, imm = imm)
-		
+		self.encoder(_asm_storeload, func_name, t = reg_t, s = reg_s, imm = imm)
 		return _asm_storeload
 		
 ############################################################
@@ -277,14 +283,14 @@ class InstBuilder(object):
 		sign = u32 if unsigned else s32
 		div_name = 'divu' if unsigned else 'div'
 		 
-		src1 = self._parseRegister(args[0])
-		src2 = self._parseRegister(args[1])
+		reg_s = self._parseRegister(args[0])
+		reg_t = self._parseRegister(args[1])
 
 		def _asm_div(b):
-			b.HI = sign(b[src1]) % sign(b[src2])
-			b.LO = sign(b[src1]) // sign(b[src2])
+			b.HI = sign(b[reg_s]) % sign(b[reg_t])
+			b.LO = sign(b[reg_s]) // sign(b[reg_t])
 			
-		_asm_div.func_dict['mem_content'] = self.encoder(div_name, src1 = src1, src2 = src2)
+		self.encoder(_asm_div, div_name, t = reg_t, s = reg_s)
 
 		return _asm_div
 	
@@ -305,15 +311,15 @@ class InstBuilder(object):
 		sign = u32 if unsigned else s32
 		mult_name = 'multu' if unsigned else 'mult'
 		
-		src1 = self._parseRegister(args[0])
-		src2 = self._parseRegister(args[1])
+		reg_s = self._parseRegister(args[0])
+		reg_t = self._parseRegister(args[1])
 	
 		def _asm_mult(b):
-			result = sign(b[src1]) * sign(b[src2])
+			result = sign(b[reg_s]) * sign(b[reg_t])
 			b.HI = (result >> 32) & 0xFFFFFFFF
 			b.LO = result & 0xFFFFFFFF
 			
-		_asm_mult.func_dict['mem_content'] = self.encoder(mult_name, src1 = src1, src2 = src2)
+		self.encoder(_asm_mult, mult_name, s = reg_s, t = reg_t)
 				
 		return _asm_mult
 		
@@ -498,7 +504,7 @@ class InstBuilder(object):
 			Syntax: BranchZ
 		"""
 		self.__checkArguments(args, 2)
-		return self.branch_TEMPLATE('bgez', args[1], args[0], None, lambda a, b: a >= 0)
+		return self.branch_TEMPLATE('bgez', args[1], args[0], 0x1, lambda a, b: a >= 0)
 		
 	def ins_bgezal(self, args):
 		"""
@@ -506,7 +512,7 @@ class InstBuilder(object):
 			Syntax: BranchZ
 		"""
 		self.__checkArguments(args, 2)
-		return self.branch_TEMPLATE('bgezal', args[1], args[0], None, lambda a, b: a >= 0, True)
+		return self.branch_TEMPLATE('bgezal', args[1], args[0], 0x11, lambda a, b: a >= 0, True)
 		
 	def ins_bgtz(self, args):
 		"""
@@ -514,7 +520,7 @@ class InstBuilder(object):
 			Syntax: BranchZ
 		"""
 		self.__checkArguments(args, 2)
-		return self.branch_TEMPLATE('bgtz', args[1], args[0], None, lambda a, b: a > 0)
+		return self.branch_TEMPLATE('bgtz', args[1], args[0], 0, lambda a, b: a > 0)
 		
 	def ins_blez(self, args):
 		"""
@@ -522,7 +528,7 @@ class InstBuilder(object):
 			Syntax: BranchZ
 		"""
 		self.__checkArguments(args, 2)
-		return self.branch_TEMPLATE('blez', args[1], args[0], None, lambda a, b: a <= 0)
+		return self.branch_TEMPLATE('blez', args[1], args[0], 0, lambda a, b: a <= 0)
 
 	def ins_bltz(self, args):
 		"""
@@ -530,7 +536,7 @@ class InstBuilder(object):
 			Syntax: BranchZ
 		"""
 		self.__checkArguments(args, 2)
-		return self.branch_TEMPLATE('bltz', args[1], args[0], None, lambda a, b: a < 0)
+		return self.branch_TEMPLATE('bltz', args[1], args[0], 0, lambda a, b: a < 0)
 
 	def ins_bltzal(self, args):
 		"""
@@ -538,7 +544,7 @@ class InstBuilder(object):
 			Syntax: BranchZ
 		"""
 		self.__checkArguments(args, 2)
-		return self.branch_TEMPLATE('bltzal', args[1], args[0], None, lambda a, b: a < 0, True)
+		return self.branch_TEMPLATE('bltzal', args[1], args[0], 0x10, lambda a, b: a < 0, True)
 
 
 ############################################################
@@ -550,7 +556,7 @@ class InstBuilder(object):
 			Syntax: LoadI
 		"""
 		self.__checkArguments(args, 1)
-		des = self._parseRegister(args[0])
+		reg_t = self._parseRegister(args[0])
 		
 		try:
 			value = int(args[2], 0) & 0xFFFF
@@ -558,9 +564,9 @@ class InstBuilder(object):
 			raise self.InvalidParameter
 		
 		def _asm_lui(b):
-			b[des] = (value << 16)
+			b[reg_t] = (value << 16)
 			
-		_asm_lui.func_dict['mem_content'] = self.encoder('lui', des = des, imm = value)
+		self.encoder(_asm_lui, 'lui', t = reg_t, imm = value)
 			
 		return _asm_lui
 		
@@ -649,16 +655,15 @@ class InstBuilder(object):
 			Syntax: JumpR
 		"""
 		self.__checkArguments(args, 1)
-		src = self._parseRegister(args[0])
+		reg_s = self._parseRegister(args[0])
 		
 		jr_name = 'jalr' if link else 'jr'
 		
 		def _asm_jr(b):
 			if link: b[31] = b.PC
-			b.PC = b[src]
+			b.PC = b[reg_s]
 		
-		_asm_jr.func_dict['mem_content'] = self.encoder(jr_name, src1 = src)
-		
+		self.encoder(_asm_jr, jr_name, s = reg_s)
 		return _asm_jr
 		
 	def ins_jal(self, args):
@@ -684,11 +689,12 @@ class InstBuilder(object):
 			Syntax: MoveFrom
 		"""
 		self.__checkArguments(args, 1)
-		des = self._parseRegister(args[0])
+		reg_d = self._parseRegister(args[0])
 		
 		def _asm_mflo(b):
-			b[des] = b.LO
-			
+			b[reg_d] = b.LO
+		
+		self.encoder(_asm_mflo, 'mflo', d = reg_d)
 		return _asm_mflo
 		
 	def ins_mfhi(self, args):
@@ -697,11 +703,12 @@ class InstBuilder(object):
 			Syntax: MoveFrom
 		"""
 		self.__checkArguments(args, 1)
-		des = self._parseRegister(args[0])
+		reg_d = self._parseRegister(args[0])
 
 		def _asm_mfhi(b):
-			b[des] = b.HI
+			b[reg_d] = b.HI
 
+		self.encoder(_asm_mfhi, 'mfhi', d = reg_d)
 		return _asm_mfhi
 		
 	def ins_mtlo(self, args):
@@ -710,11 +717,12 @@ class InstBuilder(object):
 			Syntax: MoveTo
 		"""
 		self.__checkArguments(args, 1)
-		src = self._parseRegister(args[0])
+		reg_s = self._parseRegister(args[0])
 
 		def _asm_mtlo(b):
-			b.LO = b[src]
+			b.LO = b[reg_s]
 
+		self.encoder(_asm_mtlo, 'mtlo', s = reg_s)
 		return _asm_mtlo
 		
 	def ins_mthi(self, args):
@@ -723,11 +731,12 @@ class InstBuilder(object):
 			Syntax: MoveTo
 		"""
 		self.__checkArguments(args, 1)
-		src = self._parseRegister(args[0])
+		reg_s = self._parseRegister(args[0])
 
 		def _asm_mthi(b):
-			b.HI = b[src]
+			b.HI = b[reg_s]
 
+		self.encoder(_asm_mthi, 'mthi', s = reg_s)
 		return _asm_mthi
 		
 ############################################################
@@ -743,7 +752,7 @@ class InstBuilder(object):
 		def _asm_nop(b):
 			pass
 		
-		_asm_nop.func_dict['mem_content'] = 0x0
+		self.encoder(_asm_nop, 'nop')
 		return _asm_nop
 		
 	def ins_syscall(self, args):
@@ -756,5 +765,5 @@ class InstBuilder(object):
 		def _asm_syscall(b):
 			pass
 		
-		_asm_syscall.func_dict['mem_content'] = self.encoder('syscall')
+		self.encoder(_asm_syscall, 'syscall')
 		return _asm_syscall
