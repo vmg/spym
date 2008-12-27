@@ -103,10 +103,12 @@ class VirtualMachine(object):
 		self.__initialize()
 		
 	def debugPrintAll(self):
-		print str(self.memory)
+		print (str(self.memory))
 		
-		print "Parsed labels:\n"
+		label_output = "Parsed labels:\n"
 		for (label, address) in self.parser.labels.items():
-			print "[0x%08x]: '%s'" % (address, label)
-		print "\n"
+			label_output += "[0x%08x]: '%s'" % (address, label)
+		label_output += "\n"
+		
+		print (label_output)
 		

@@ -205,7 +205,7 @@ class MemoryManager(object):
 				output += "\n        %s\n" % current_section.upper()
 				
 			if isinstance(block, self.CodeBlock):			
-				for i in xrange(self.BLOCK_SIZE // 4):
+				for i in range(self.BLOCK_SIZE // 4):
 					ins = block.contents[i]
 					if ins:
 						output += "[0x%08X]    " % (address + i * 4)
@@ -222,7 +222,7 @@ class MemoryManager(object):
 				if data == 0:
 					output += "0x00000000"
 				else:
-					for i in xrange(maxwords):
+					for i in range(maxwords):
 						word = (data >> ((maxwords - i - 1) * 32))
 						output += "0x%08x " % (word & 0xFFFFFFFF)
 						

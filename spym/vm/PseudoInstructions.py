@@ -1,4 +1,4 @@
-from Instructions import InstBuilder
+from spym.vm.Instructions import InstBuilder
 from spym.common.Utils import *
 
 class PseudoInstBuilder(InstBuilder):

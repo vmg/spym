@@ -11,7 +11,6 @@ class TestParser(unittest.TestCase):
 	
 	def _runAndPrint(self, program):
 		self.parser.parseBuffer(program)
-		print str(self.memory)
 		
 	def testTokenizer(self):
 		testdata = [

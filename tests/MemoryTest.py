@@ -8,15 +8,13 @@ class TestMemoryManager(unittest.TestCase):
 		self.memory = MemoryManager(None, 32)
 		
 	def testInnerConsistency(self):
-		for i in xrange(0, 128, 4):
+		for i in range(0, 128, 4):
 			self.memory[i] = 0xFF000000
 		
 		self.assertEqual(len(self.memory.memory), 4)
 		
 		self.memory[128] = 0x0
 		self.assertEqual(len(self.memory.memory), 5)
-		
-		print str(self.memory)
 		
 	def testSimpleAllocation(self):
 		self.memory[0x00000004] = 0x2

@@ -53,7 +53,7 @@ class AssemblyPreprocessor(object):
 		if not string[0] == '"' or not string[-1] == '"':
 			raise self.InvalidParameter("Malformed string constant.")
 			
-		string = string[1:-1].decode('string_escape')
+		string = string[1:-1].replace(r'\n', '\n').replace(r'\"', '"')
 		
 		for c in string:
 			self.memory[address, 1] = ord(c) & 0xFF

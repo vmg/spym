@@ -36,6 +36,3 @@ def bindump(src, offset = 0, length = 16):
        result += "0x%08X | %-*s | %s\n" % (N, length*3, hexa, s)
        N+=length
     return result
-	
-if __name__ == '__main__':
-	print testdump([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 4)

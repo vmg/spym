@@ -42,13 +42,13 @@ class InstructionEncoder(object):
 		
 		
 	def __call__(self, ins_closure, ins_name, s = 0, t = 0, d = 0, shift = 0, imm = 0, label = ""):
-		ins_data = getattr(self.builder, 'ins_' + ins_name)
+		encoding, _, opcode, syntax = self.builder.asm_metadata['ins_' + ins_name]
 		
-		binary_encoding = self.encodeBinary(ins_data.encoding, ins_data.opcode, s, t, d, shift, imm)
-		text_encoding = self.encodeText(ins_name, ins_data.encoding, ins_data.syntax, s, t, d, shift, imm, label)
+		binary_encoding = self.encodeBinary(encoding, opcode, s, t, d, shift, imm)
+		text_encoding = self.encodeText(ins_name, encoding, syntax, s, t, d, shift, imm, label)
 		
-		ins_closure.func_dict['mem_content'] = binary_encoding
-		ins_closure.func_dict['text'] = text_encoding
+		setattr(ins_closure, 'mem_content', binary_encoding)
+		setattr(ins_closure, 'text', text_encoding)
 			
 		
 		

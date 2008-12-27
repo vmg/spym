@@ -66,7 +66,7 @@ class AssemblyParser(object):
 					if not isinstance(inst_code, list):
 						inst_code = [inst_code, ]
 						
-					inst_code[0].func_dict['orig_text'] = line.strip()
+					setattr(inst_code[0], 'orig_text', line.strip())
 					
 					for inst in inst_code:
 						if hasattr(inst, '_inst_bld_tmp'):
@@ -100,7 +100,9 @@ class AssemblyParser(object):
 		line = line.split('#', 1)[0].strip()
 		
 		if ':' in line:
-			line_label, line = map(str.strip, line.split(':', 1))
+			line_label, line = line.split(':', 1)
+			line_label = line_label.strip()
+			line = line.strip()
 		
 		line_tokens = line.split(None, 1)
 		

@@ -44,6 +44,7 @@ class InstBuilder(object):
 		self.__initMetaData()
 		
 	def __initMetaData(self):
+		self.asm_metadata = {}
 		for attr in dir(self):
 			if attr.startswith('ins_'):
 				func_name = attr[4:]
@@ -51,14 +52,8 @@ class InstBuilder(object):
 				
 				if not func.__doc__:
 					raise self.SyntaxException("Missing syntax data for instruction '%s'." % func_name)
-					
-				encoding, argcount, opcode, syntax = self.__parseSyntaxData(func_name, func.__doc__)
-				func.func_dict['encoding'] = encoding
-				func.func_dict['opcode'] = opcode
-				func.func_dict['syntax'] = syntax
 				
-				if argcount is not None:
-					func.func_dict['argcount'] = argcount
+				self.asm_metadata[attr] = self.__parseSyntaxData(func_name, func.__doc__)
 		
 	def __parseSyntaxData(self, func_name, docstring):
 		opcode = None
@@ -77,6 +72,8 @@ class InstBuilder(object):
 			elif lname == "syntax":
 				if contents.lower() in self.SYNTAX_DATA:
 					encoding, syntax = self.SYNTAX_DATA[contents.lower()]
+				else:
+					syntax = contents
 			elif lname == 'encoding' and encoding is None:
 				encoding = contents
 
@@ -133,13 +130,13 @@ class InstBuilder(object):
 		
 		if not hasattr(self, func):
 			raise self.UnknownInstruction("Unknown instruction: '%s'" % func)
-		
-		inst_builder = getattr(self, func)
-		
-		if hasattr(inst_builder, 'argcount'):
-			self.__checkArguments(args, getattr(inst_builder, 'argcount'))
 			
-		return inst_builder(args)
+		if func in self.asm_metadata:
+			argcount = self.asm_metadata[func][1]
+			if argcount is not None:
+				self.__checkArguments(args, argcount)
+			
+		return getattr(self, func)(args)
 		
 	def resolveLabels(self, func, labels):
 		data = func._inst_bld_tmp
@@ -155,9 +152,9 @@ class InstBuilder(object):
 		if data[0] == 'jump':
 			self.encoder(func, func_name, imm = u32(func.label_address >> 2), label = label)
 		elif data[0] == 'branch': # TODO: encoding for branch instructions
-			func.func_dict['mem_content'] = self.encoder(func, func_name, s = data[3], t = data[4], imm = 0xDEAD)
+			self.encoder(func, func_name, s = data[3], t = data[4], imm = 0xDEAD)
 		
-		del(func.func_dict['_inst_bld_tmp'])
+		delattr(func, '_inst_bld_tmp')
 		return True
 
 ############################################################
@@ -217,10 +214,9 @@ class InstBuilder(object):
 			if _lambda_f(b[reg_s], b[reg_t]):
 				if link: b[31] = b.PC
 				b.PC = _asm_branch.label_address
-				
-		_asm_branch.func_dict['label_address'] = None
-		_asm_branch.func_dict['_inst_bld_tmp'] = ('branch', func_name, label, reg_s, reg_t)
-
+			
+		setattr(_asm_branch, 'label_address', None)
+		setattr(_asm_branch, '_inst_bld_tmp', ('branch', func_name, label, reg_s, reg_t))
 		return _asm_branch
 		
 	def storeload_TEMPLATE(self, func_name, args, size, unsigned = False):		
@@ -629,10 +625,9 @@ class InstBuilder(object):
 		def _asm_j(b):
 			if link: b[31] = b.PC
 			b.PC = _asm_j.label_address
-			
-		_asm_j.func_dict['label_address'] = None
-		_asm_j.func_dict['_inst_bld_tmp'] = ('jump', jmp_name, label)
-			
+		
+		setattr(_asm_j, 'label_address', None)
+		setattr(_asm_j, '_inst_bld_tmp', ('jump', jmp_name, label))
 		return _asm_j
 		
 	def ins_jr(self, args, link = False):
