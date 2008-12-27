@@ -1,9 +1,8 @@
 import re
-import pdb
-
-from spym.common.Utils import *
 from spym.common.InstEncoder import InstructionEncoder
 from spym.vm.RegBank import RegisterBank
+
+from spym.common.Utils import *
 
 class InstBuilder(object):
 	
@@ -160,13 +159,18 @@ class InstBuilder(object):
 ############################################################
 ###### Templates
 ############################################################
-	def arith_TEMPLATE(self, func_name, args, _lambda_f):
+	def arith_TEMPLATE(self, func_name, args, _lambda_f, overflow = True):
 		reg_d = self._parseRegister(args[0])
 		reg_s = self._parseRegister(args[1])
 		reg_t = self._parseRegister(args[2])
 		
 		def _asm_arith(b): 
-			b[reg_d] = _lambda_f(b[reg_s], b[reg_t])
+			result = _lambda_f(b[reg_s], b[reg_t])
+			
+			if overflow and result & (1 << 32):
+				raise VirtualMachine.MIPS_Exception('OVF')
+				
+			b[reg_d] = result
 			
 		self.encoder(_asm_arith, func_name, d = reg_d, s = reg_s, t = reg_t)
 		return _asm_arith
@@ -281,8 +285,10 @@ class InstBuilder(object):
 		reg_t = self._parseRegister(args[1])
 
 		def _asm_div(b):
-			b.HI = sign(b[reg_s]) % sign(b[reg_t])
-			b.LO = sign(b[reg_s]) // sign(b[reg_t])
+			try:
+				b.LO, b.HI = divmod(sign(b[reg_s]), sign(b[reg_t]))
+			except ZeroDivisionError:
+				raise VirtualMachine.MIPS_Exception('OVF')
 			
 		self.encoder(_asm_div, div_name, t = reg_t, s = reg_s)
 

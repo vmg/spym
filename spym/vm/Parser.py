@@ -1,14 +1,10 @@
 from __future__ import with_statement
 
 import re
-
-from spym.vm.PseudoInstructions import PseudoInstBuilder
-from spym.vm.RegBank import RegisterBank
-from spym.vm.Instructions import InstBuilder
-from spym.vm.Memory import MemoryManager
 from spym.vm.Preprocessor import AssemblyPreprocessor
 
-from spym.common.Utils import *
+from spym.vm.Instructions import InstBuilder
+from spym.vm.PseudoInstructions import PseudoInstBuilder
 	
 class AssemblyParser(object):
 	"""Core for the assembly parsing routines."""

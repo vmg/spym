@@ -1,7 +1,8 @@
 import unittest
 import testcommon
 
-from spym.vm.VirtualMachine import VirtualMachine
+#from spym.vm.VirtualMachine import VirtualMachine
+from spym.vm import VirtualMachine
 
 class GlobalASMTests(unittest.TestCase):
 	def _runTest(self, asm):

@@ -1,3 +1,5 @@
+EXCEPTION_HANDLER_ADDR = 0x80000080
+
 EXCEPTION_HANDLER = \
 """
 	# Standard startup code.  Invoke the routine "main" with arguments:

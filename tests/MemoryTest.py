@@ -1,11 +1,14 @@
 import unittest
 import testcommon
 
+from spym.vm.VirtualMachine import VirtualMachine
 from spym.vm.Memory import MemoryManager
 
 class TestMemoryManager(unittest.TestCase):
 	def setUp(self):
-		self.memory = MemoryManager(None, 32)
+		self.vm = VirtualMachine("", loadAsBuffer = True)
+		self.memory = self.vm.memory
+		self.memory.clear()
 		
 	def testInnerConsistency(self):
 		for i in range(0, 128, 4):
@@ -32,19 +35,19 @@ class TestMemoryManager(unittest.TestCase):
 		self.assertEqual(self.memory[0x0002], 0x0A0A)
 		
 	def testMemoryBounds(self):
-		self.assertRaises(MemoryManager.InvalidMemoryAddress, self.memory.__getitem__, 0xFFFFFFFF0)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.__getitem__, 0xFFFFFFFF0)
 		self.assertEqual(self.memory[0xFFFFFFFF], 0)
 		
 	def testAlignmentChecks(self):
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.getWord, 0x0003)
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.getWord, 0x0002)
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.getHalf, 0x0003)
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.getWord, 0x0001)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getWord, 0x0003)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getWord, 0x0002)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getHalf, 0x0003)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.getWord, 0x0001)
 		
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.setWord, 0x0003, 0xFFFF)
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.setWord, 0x0002, 0xFFFF)
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.setHalf, 0x0003, 0xFFFF)
-		self.assertRaises(MemoryManager.UnalignedMemoryAccess, self.memory.setWord, 0x0001, 0xFFFF)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setWord, 0x0003, 0xFFFF)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setWord, 0x0002, 0xFFFF)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setHalf, 0x0003, 0xFFFF)
+		self.assertRaises(VirtualMachine.MIPS_Exception, self.memory.setWord, 0x0001, 0xFFFF)
 		
 		self.assertEqual(self.memory.getWord(0x0000), 0)
 		self.assertEqual(self.memory.getHalf(0x0002), 0)

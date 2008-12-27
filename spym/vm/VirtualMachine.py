@@ -1,22 +1,37 @@
 import os.path
 import time
 
+from spym.vm.Memory import MemoryManager
 from spym.vm.Parser import AssemblyParser
 from spym.vm.RegBank import RegisterBank
-from spym.vm.Memory import MemoryManager
-from spym.vm.ExceptionHandler import EXCEPTION_HANDLER
-from spym.common.Utils import *
-
+from spym.vm.ExceptionHandler import EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR
 
 class VirtualMachine(object):
+	
+	EXCEPTIONS = {
+		'INT' 	: 0,	# interrupt (hw or sw)
+		'TLBPF' : 1,	# TLB: write attempt in protected page
+		'TLBML' : 2,	# TLB: inst read attempt in prot. page
+		'TLBMS'	: 3,	# TLB: data read attempt in prot. page
+		'ADDRL'	: 4,	# address error on read
+		'ADDRS' : 5,	# address error on store
+		'IBUS'	: 6,	# bus error on inst. search
+		'DBUS'	: 7,	# bus error on read/store
+		'SYSCALL' : 8,	# system call
+		'BKPT'	: 9,	# breakpoint
+		'RI'	: 10,	# reserved instruction
+		'CU'	: 11,	# coprocessor disabled
+		'OVF'	: 12,	# overflow
+	}
+	
 	class RuntimeVMException(Exception):
 		pass
 		
-	class HardwareInterrupt(Exception):
-		pass
-		
-	class SoftwareInterrupt(Exception):
-		pass
+	class MIPS_Exception(Exception):
+		def __init__(self, code, int_id = None, badaddr = None):
+			self.code = code
+			self.int_id = int_id
+			self.badaddr = badaddr
 		
 	def __init__(self, assembly, exceptionHandler = None, loadAsBuffer = False, enablePseudoInsts = True, memoryBlockSize = 32):
 		self.enablePseudoInsts = enablePseudoInsts
@@ -35,6 +50,14 @@ class VirtualMachine(object):
 		
 		self.__initialize()
 		
+	def __clock(self, curtime):
+		if (curtime - self.cpu_timer) * 1000 >= 10.0:
+			self.cpu_timer = curtime
+			self.regBank.CP0.Count += 1
+			if self.regBank.CP0.Count == self.regBank.CP0.Compare:
+				self.regBank.CP0.Count = 0
+				raise self.MIPS_Exception('INT', int_id = 5)
+		
 	def run(self):
 		self.parser.resolveGlobalDependencies()
 			
@@ -46,34 +69,55 @@ class VirtualMachine(object):
 		self.regBank.CP0.Compare = 50
 		self.regBank[29] = 0x80000000 - 0xC
 		
-		timer = time.clock()
+		self.cpu_timer = time.clock()
 		
 		while 1:
-			instruction = self.memory.getInstruction(self.regBank.PC)
-			self.regBank.PC += 0x4
-			
-#			print "Running instruction %s at %s" % (str(instruction), str(self.regBank.PC))
-			
-			if not instruction:
-				break
-#				raise self.RuntimeVMException("Attempted to execute non-instruction at %08X" % self.regBank.PC)
-				
 			try:
-				if (time.clock() - timer) * 1000 >= 10.0:
-					timer = time.clock()
-					self.regBank.CP0.Count += 1
-					if self.regBank.CP0.Count == self.regBank.CP0.Compare:
-						self.regBank.CP0.Count = 0
-						raise self.HardwareInterrupt
-						
+				self.__clock(time.clock())
+
+				oldPC = self.regBank.PC
+				instruction = self.memory.getInstruction(self.regBank.PC)
+				
+				if not instruction:
+					break
+				
 				instruction(self.regBank)
 				
-			except self.HardwareInterrupt:
-				raise self.RuntimeVMException("Unhandled hardware interrupt.")
+				if oldPC == self.regBank.PC:
+					self.regBank.PC += 0x4
+				
+			except self.MIPS_Exception, cur_exception:
+				self.processException(cur_exception)
+				
+	def processException(self, exception):
+		if exception.code not in self.EXCEPTIONS:
+			raise self.RuntimeVMException("Unknown MIPS exception raised.")
 			
-			except self.SoftwareInterrupt:
-				raise self.RuntimeVMException("Unhandled software interrupt.")		
+		print ("DEBUG: Raised MIPS exception '%s'" % exception.code)
+						
+		code = self.EXCEPTIONS[exception.code]
 		
+		if code == 0: # interrupt raised
+			int_id = exception.int_id
+			
+			if not 0 <= int_id <= 5:
+				raise self.RuntimeVMException("Invalid interrupt source %d." % int_id)
+			
+			if (self.regBank.CP0.Status & 0x1) and (self.regBank.CP0.Status & (1 << (int_id + 8))):
+				self.regBank.CP0.Cause |= (1 << (10 + int_id))
+			else: return
+			
+		elif code == 4 or code == 5: # memory access error
+			self.regBank.CP0.BadVAddr = exception.badaddr
+				
+		self.regBank.CP0.Cause &= ~0x3C
+		self.regBank.CP0.Cause |= (code << 2) # set exception code in the cause register
+		
+		self.regBank.Status &= ~0x1	# disable exceptions
+		self.regBank.Status &= ~0x2	# enter kernel mode
+		self.regBank.CP0.EPC = self.regBank.PC	# save old PC
+		
+		self.regBank.PC = EXCEPTION_HANDLER_ADDR # jump to the exception handler
 		
 	def getAccessMode(self):
 		return 'user' if self.regBank.CP0.getUserBit() else 'kernel'
@@ -111,4 +155,6 @@ class VirtualMachine(object):
 		label_output += "\n"
 		
 		print (label_output)
+		
+		print (str(self.regBank))
 		

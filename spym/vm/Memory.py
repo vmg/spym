@@ -1,9 +1,3 @@
-from __future__ import with_statement
-import sys
-
-from spym.common.Utils import *
-
-
 class MemoryManager(object):
 	SEGMENT_DATA = {
 		'krnel_data_bottom':(0x00000000, 0x00400000 - 1),
@@ -24,18 +18,6 @@ class MemoryManager(object):
 		'half' : 2,
 		'byte' : 1
 	}
-	
-	class InvalidMemoryAddress(Exception):
-		pass
-		
-	class OffsetOutOfBounds(Exception):
-		pass
-		
-	class UnalignedMemoryAccess(Exception):
-		pass
-		
-	class ProtectionFault(Exception):
-		pass
 
 	class MemoryBlock(object):
 		SIZE_MASKS = [None, 0xFF, 0xFFFF, None, 0xFFFFFFFF]
@@ -45,15 +27,11 @@ class MemoryManager(object):
 			self.contents = 0x0
 			
 		def getData(self, size, offset):
-			if offset > self.BLOCK_SIZE:
-				raise MemoryManager.OffsetOutOfBounds
-				
+			assert(offset <= self.BLOCK_SIZE)				
 			return (self.contents >> (offset * 8)) & self.SIZE_MASKS[size]
 			
 		def setData(self, size, offset, value):
-			if offset > self.BLOCK_SIZE:
-				raise MemoryManager.OffsetOutOfBounds
-			
+			assert(offset <= self.BLOCK_SIZE)
 			self.contents = self.contents & ~(self.SIZE_MASKS[size] << (offset * 8))
 			self.contents = self.contents | ((value & self.SIZE_MASKS[size]) << (offset * 8))
 			
@@ -91,14 +69,11 @@ class MemoryManager(object):
 		return (address // self.BLOCK_SIZE) in self.memory
 		
 	def __getData(self, address, size, binary = True):
-		if address % size:
-			raise self.UnalignedMemoryAccess("Attempting to read at address 0x%08X with size %d (not aligned.)" % (address, size))
-		
-		if not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS:
-			raise self.InvalidMemoryAddress
+		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
+			raise self.vm.MIPS_Exception('ADDRL', badaddr = address)
 			
-		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
-			raise self.ProtectionFault("Cannot access %08X in user mode." % address)
+		if self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
+			raise self.vm.MIPS_Exception('ADDRL', badaddr = address) # FIXME: is this the right exception?
 		
 		if not self.__contains__(address):
 			return 0x0
@@ -108,14 +83,11 @@ class MemoryManager(object):
 		
 		
 	def __setData(self, address, size, data):
-		if address % size:
-			raise self.UnalignedMemoryAccess("Attempting to write '%x' (size %d) at address 0x%08X (not aligned.)" % (data, size, address))
-		
-		if not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS:
-			raise self.InvalidMemoryAddress
+		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
+			raise self.vm.MIPS_Exception('ADDRS', badaddr = address)
 			
-		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
-			raise self.ProtectionFault("Cannot access %08X in user mode." % address)
+		if self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
+			raise self.vm.MIPS_Exception('ADDRS', badaddr = address) # FIXME: is this the right exception?
 		
 		if not self.__contains__(address):
 			self.__allocate(address)
@@ -123,7 +95,7 @@ class MemoryManager(object):
 		destinationBlock = self.memory[address // self.BLOCK_SIZE]
 		
 		if hasattr(data, '__call__') and not isinstance(destinationBlock, self.CodeBlock):
-			raise self.ProtectionFault("Cannot assemble instructions in data-only segments.")
+			raise AssemblyParser.ParserException("Cannot assemble instructions in data-only segments.")
 			
 		self.memory[address // self.BLOCK_SIZE].setData(size, address % self.BLOCK_SIZE, data)
 	
@@ -171,6 +143,10 @@ class MemoryManager(object):
 			if isinstance(block, self.CodeBlock):
 				for ins in block.contents:
 					if ins: yield ins
+	
+	def clear(self):
+		del(self.memory)
+		self.memory = {}
 	
 	def __getitem__(self, address):		
 		if isinstance(address, tuple):

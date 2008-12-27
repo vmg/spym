@@ -17,9 +17,6 @@ class RegisterBank(object):
 		"$gp" : 28, "$sp" : 29, 
 		"$fp" : 30, "$ra" : 31
 	}
-	
-	class RegisterAccessFault(Exception):
-		pass
 		
 	class CoprocessorZero(object):
 		STATUS_USER_MASK = 0x0002
@@ -46,8 +43,7 @@ class RegisterBank(object):
 			return self.Status & self.STATUS_USER_MASK
 			
 		def __getitem__(self, item):
-			if self.getUserBit():
-				raise RegisterBank.RegisterAccessFault("Cannot access Coprocessor 0 registers while in usermode.")
+			assert(self.getUserBit() == 0)
 				
 			if item in self.REGISTER_NAMES:
 				return getattr(self, self.REGISTER_NAMES[item])
@@ -58,8 +54,7 @@ class RegisterBank(object):
 			return 0x0
 		
 		def __setitem__(self, item, data):
-			if self.getUserBit():
-				raise RegisterBank.RegisterAccessFault("Cannot access Coprocessor 0 registers while in usermode.")
+			assert(self.getUserBit() == 0)
 				
 			data = data & 0xFFFFFFFF
 				
@@ -84,4 +79,12 @@ class RegisterBank(object):
 		if item: self.std_registers[item] = value & 0xFFFFFFFF
 		
 	def __str__(self):
-		pass
+		regbank_output = "MIPS R2000 Register Bank\n"
+		regbank_output += ("HI: 0x%08X  |  LO: 0x%08X  |  PC: 0x%08X" % (self.HI, self.LO, self.PC)).center(74)
+		regbank_output += '\n'
+		
+		for i in range(len(self.std_registers)):
+			regbank_output += ("$%d: " % i).rjust(5) + ("0x%08X" % self.std_registers[i])
+			regbank_output += "\n" if i % 4 == 3 else "  |  "
+
+		return regbank_output
