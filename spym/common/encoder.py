@@ -32,8 +32,8 @@ class InstructionEncoder(object):
 	def __init__(self, builder):
 		self.builder = builder
 		
-	def __encode_R(self, s, t, d, a, f):
-		return "000000" + bin(s, 5) + bin(t, 5) + bin(d, 5) + bin(a, 5) + f
+	def __encode_R(self, o, s, t, d, a, f):
+		return o + bin(s, 5) + bin(t, 5) + bin(d, 5) + bin(a, 5) + f
 		
 	def __encode_I(self, o, s, t, i):
 		return o + bin(s, 5) + bin(t, 5) + bin(i, 16)
@@ -41,9 +41,9 @@ class InstructionEncoder(object):
 	def __encode_J(self, o, i):
 		return o + bin(i, 26)
 		
-	def encodeBinary(self, encoding, opcode, s, t, d, shift, imm):
+	def encodeBinary(self, encoding, opcode, funcode, s, t, d, shift, imm):
 		if encoding == 'R':
-			str_encoding = self.__encode_R(s, t, d, shift, opcode)
+			str_encoding = self.__encode_R(opcode, s, t, d, shift, funcode)
 		elif encoding == 'I':
 			str_encoding = self.__encode_I(opcode, s, t, imm)
 		elif encoding == 'J':
@@ -67,9 +67,9 @@ class InstructionEncoder(object):
 		
 		
 	def __call__(self, ins_closure, ins_name, s = 0, t = 0, d = 0, shift = 0, imm = 0, label = ""):
-		encoding, _, opcode, syntax = self.builder.asm_metadata['ins_' + ins_name]
+		encoding, _, opcode, funcode, syntax = self.builder.asm_metadata['ins_' + ins_name]
 		
-		binary_encoding = self.encodeBinary(encoding, opcode, s, t, d, shift, imm)
+		binary_encoding = self.encodeBinary(encoding, opcode, funcode, s, t, d, shift, imm)
 		text_encoding = self.encodeText(ins_name, encoding, syntax, s, t, d, shift, imm, label)
 		
 		setattr(ins_closure, 'mem_content', binary_encoding)

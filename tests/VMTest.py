@@ -49,7 +49,11 @@ bdata:
 .text
 main:
 	ori $3, $0, 8
+	li $7, 4
+	lw $5, bdata+4($7)
+#	lw $5, 4($0)
 	addi $4, $3, 2
+	add $3, $7, 0x7FFFABC0
 """)
 
 if __name__ == '__main__':

@@ -25,15 +25,9 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 class AssemblyPreprocessor(object):
 	
-	class InvalidDirective(Exception):
+	class PreprocessorException(Exception):
 		pass
 		
-	class InvalidParameterCount(Exception):
-		pass
-	
-	class InvalidParameter(Exception):
-		pass
-	
 	def __init__(self, parser, memory):
 		self.parser = parser
 		self.memory = memory
@@ -44,7 +38,7 @@ class AssemblyPreprocessor(object):
 		func = 'dir_' + identifier[1:]
 		
 		if not hasattr(self, func):
-			raise self.InvalidDirective("Unknown instruction: %s" % func)
+			raise self.PreprocessorException("Unknown preprocessor directive: %s" % func)
 		
 		return getattr(self, func)(args, cur_address) or cur_address
 		
@@ -54,7 +48,7 @@ class AssemblyPreprocessor(object):
 		if  (_min is not None and argcount < _min) or \
 			(_max is not None and argcount > _max) or \
 			(_count is not None and argcount != _count):
-			raise self.InvalidParameterCount
+			raise self.PreprocessorException("Wrong parameter count in preprocessor directive.")
 		
 	def __segmentChange(self, args, segment):
 		self.__checkArgs(args, _max = 1)
@@ -65,16 +59,16 @@ class AssemblyPreprocessor(object):
 		try:
 			address = int(args[0], 0)
 		except ValueError:
-			raise self.InvalidParameter("Invalid address: '%s'" % args[0])
+			raise self.PreprocessorException("Invalid address: '%s'" % args[0])
 		
 		if self.memory.getSegment(address) != segment:
-			raise self.InvalidParameter("Address %X doesn't belong to the %s segment." % (address, segment))
+			raise self.PreprocessorException("Address %X doesn't belong to the %s segment." % (address, segment))
 		
 		return address
 		
 	def __assembleString(self, string, address, nullterm):
 		if not string[0] == '"' or not string[-1] == '"':
-			raise self.InvalidParameter("Malformed string constant.")
+			raise self.PreprocessorException("Malformed string constant.")
 			
 		string = string[1:-1].replace(r'\n', '\n').replace(r'\"', '"')
 		
@@ -97,8 +91,11 @@ class AssemblyPreprocessor(object):
 		self.align = None
 		try:
 			for d in data:
+				if not d: continue
 				if len(d) == 3 and d[0] == "'" and d[2] == "'":
 					d = ord(d[1])
+				elif d in self.parser.local_labels:
+					d = self.parser.local_labels[d]
 				else:
 					d = int(d, 0)
 					
@@ -106,9 +103,16 @@ class AssemblyPreprocessor(object):
 				address += size
 		
 		except ValueError:
-			raise self.InvalidParameter("Invalid integer constants for data assembly: '%s'" % d)
+			raise self.PreprocessorException("Invalid integer constants for data assembly: '%s'" % d)
 			
 		return address
+		
+	def dir_set(self, args, cur_address):
+		self.__checkArgs(args, _count = 1)
+		if args[0] == 'noat':
+			self.parser.instruction_assembler.assembly_regiser_protected = False
+		elif args[0] == 'at':
+			self.parser.instruction_assembler.assembly_regiser_protected = True
 		
 	def dir_data(self, args, cur_address):
 		return self.__segmentChange(args, 'user_data')
@@ -127,7 +131,7 @@ class AssemblyPreprocessor(object):
 		label = args[0]
 		
 		if label in self.parser.global_labels:
-			raise self.parser.LabelException("Global label redefinition.")
+			raise self.PreprocessorException("Global label redefinition.")
 			
 		self.parser.global_labels[label] = None
 		
@@ -140,7 +144,7 @@ class AssemblyPreprocessor(object):
 		try:
 			self.alignment = int(args[0], 0)
 		except ValueError:
-			raise self.InvalidParameter("Invalid value for alignment.")
+			raise self.PreprocessorException("Invalid value for alignment.")
 	
 	def dir_ascii(self, args, cur_address):
 		self.__checkArgs(args, _count = 1)
@@ -165,6 +169,6 @@ class AssemblyPreprocessor(object):
 		try:
 			space_count = int(args[0], 0)
 		except ValueError:
-			raise self.InvalidParameter("Invalid space value.")
+			raise self.PreprocessorException("Invalid space value.")
 
 		return self.__assembleData(['0',] * space_count, 1, cur_address)

@@ -28,7 +28,7 @@ from spym.common.encoder import InstructionEncoder
 from spym.vm.regbank import RegisterBank
 from spym.vm.exceptions import MIPS_Exception
 
-from spym.common.Utils import *
+from spym.common.utils import *
 
 class InstructionAssembler(object):
 	
@@ -49,103 +49,129 @@ class InstructionAssembler(object):
 	    'none'		:	('R', ""			),
 	  }
 	
-	class InvalidRegisterName(Exception):
-		pass
-		
-	class WrongArgumentCount(Exception):
-		pass
-		
-	class UnknownInstruction(Exception):
-		pass
-		
-	class InvalidParameter(Exception):
-		pass
+	LOADSTORE_ADDRESS_REGEX = r'(-?(?:0x)?[\da-fA-F]+)\((\$.*?)\)'
 		
 	class SyntaxException(Exception):
 		pass
 		
-	def __init__(self):
+	class InstructionAssemblerException(Exception):
+		pass
+		
+	def __init__(self, parser):
+		self.parser = parser
 		self.encoder = InstructionEncoder(self)
+		self.assembler_register_protected = True
 		self.__initMetaData()
 		
 	def __initMetaData(self):
 		self.asm_metadata = {}
 		for attr in dir(self):
-			if attr.startswith('ins_'):
-				func_name = attr[4:]
+			if attr.startswith('ins_') or attr.startswith('pins_'):
+				func_type, func_name = attr.split('_', 1)
 				func = getattr(self, attr)
 				
 				if not func.__doc__:
 					raise self.SyntaxException("Missing syntax data for instruction '%s'." % func_name)
 				
-				self.asm_metadata[attr] = self.__parseSyntaxData(func_name, func.__doc__)
+				self.asm_metadata[attr] = self.__parseSyntaxData(func_name, func.__doc__, (func_type == 'pins'))
 		
-	def __parseSyntaxData(self, func_name, docstring):
+	def __parseSyntaxData(self, func_name, docstring, pseudo):
 		opcode = None
+		fcode = None
 		syntax = None
 		encoding = None
 		argcount = None
+		custom_syntax = False
 
 		for line in docstring.split('\n'):
 			if not ':' in line: continue
 			lname, contents = line.strip().split(':', 1)
 			lname = lname.lower().strip()
 			contents = contents.strip()
-
+	
 			if lname == "opcode":
 				opcode = contents
+			elif lname == "fcode":
+				fcode = contents
 			elif lname == "syntax":
 				if contents.lower() in self.SYNTAX_DATA:
 					encoding, syntax = self.SYNTAX_DATA[contents.lower()]
 				else:
 					syntax = contents
+					custom_syntax = True
 			elif lname == 'encoding' and encoding is None:
 				encoding = contents
 
-		if opcode is None:
+		if opcode is None and not pseudo:
 			raise self.SyntaxException("Cannot resolve Opcode for instruction '%s'" % func_name)
 		
-		if encoding is None:
+		if encoding is None and not pseudo:
 			raise self.SyntaxException("Cannot resolve encoding type for instruction '%s'" % func_name)
+			
+		if fcode is None and encoding == 'R':
+			raise self.SyntaxException("Missing function code for 'r' encoding instruction '%s'" % func_name)
 			
 		if syntax is None:
 			raise self.SyntaxException("Cannot find syntax information for instruction '%s'" % func_name)
 			
 		if argcount is None:
+			if custom_syntax:
+				if not syntax.startswith(func_name):
+					raise self.SyntaxException("Malformed syntax definition. Expecting instruction syntax in the ")
+				else:
+					syntax = syntax[len(func_name):]
+					syntax.strip()
+
 			argcount = len(syntax.split(',')) if syntax else 0
 
-		return (encoding, argcount, opcode, syntax)
+		return (encoding, argcount, opcode, fcode, syntax)
 		
-	def __checkArguments(self, args, count):
+	def _checkArguments(self, args, count):
 		if len(args) != count:
-			raise self.WrongArgumentCount
+			raise self.InstructionAssemblerException("Wrong argument count in instruction.")
 			
 	def _parseRegister(self, reg):
 		if reg in RegisterBank.REGISTER_NAMES:
 			return RegisterBank.REGISTER_NAMES[reg]
 
 		reg_match = re.match(r'^\$(\d{1,2})$', reg)
+		register_id = int(reg_match.group(1)) if reg_match else -1
 
-		if not reg_match or not 0 <= int(reg_match.group(1)) < 32:
-			raise self.InvalidRegisterName("Invalid register name (%s)" % reg)
+		if not 0 <= register_id < 32:
+			raise self.InstructionAssemblerException("Invalid register name (%s)" % reg)
+			
+		if register_id == 1 and self.assembler_register_protected:
+			raise self.InstructionAssemblerException("The $1 register is reserver for assembler operations.")
 
-		return int(reg_match.group(1))
+		return register_id
+		
+	def _parseImmediate(self, imm):
+		if isinstance(imm, int):
+			return imm
+
+		try:
+			imm = int(imm, 0)
+		except ValueError:
+			raise self.InstructionAssemblerException("Invalid immediate value '%s'." % imm)
+			
+		return imm
+		
 			
 	def _parseAddress(self, addr):
 		if not isinstance(addr, str):
 			raise self.InvalidParameter
 			
-		paren_match = re.match(r'(-?\w+)\((\$.*?)\)', addr)
+		paren_match = re.match(self.LOADSTORE_ADDRESS_REGEX, addr)
 		if not paren_match:
-			raise self.InvalidParameter("Expected address definition in the form of 'immediate($register)'.")
+			raise self.InstructionAssemblerException("Wrong argument: Expected address definition in the form of 'immediate($register)'.")
 			
 		try:
 			immediate = int(paren_match.group(1), 0)
 			register = self._parseRegister(paren_match.group(2))
 		except ValueError:
-			raise self.InvalidParameter("Error when parsing composite address '%s': Invalid immediate value." % addr)
+			raise self.InstructionAssemblerException("Error when parsing composite address '%s': Invalid immediate value." % addr)
 		except self.InvalidRegisterName:
-			raise self.InvalidParameter("Error when parsing composite address '%s': Invalid register value." % addr)
+			raise self.InstructionAssemblerException("Error when parsing composite address '%s': Invalid register value." % addr)
 			
 		return (immediate, register)
 		
@@ -154,12 +180,10 @@ class InstructionAssembler(object):
 		func = 'ins_' + func
 		
 		if not hasattr(self, func):
-			raise self.UnknownInstruction("Unknown instruction: '%s'" % func)
+			raise self.InstructionAssemblerException("Unknown instruction: '%s'" % func)
 			
-		if func in self.asm_metadata:
-			argcount = self.asm_metadata[func][1]
-			if argcount is not None:
-				self.__checkArguments(args, argcount)
+		argcount = self.asm_metadata[func][1]
+		self._checkArguments(args, argcount)
 			
 		return getattr(self, func)(args)
 		
@@ -208,7 +232,7 @@ class InstructionAssembler(object):
 		shift = 0
 		
 		if shift_imm:
-			shift = int(args[2], 0)
+			shift = self._parseImmediate(args[2])
 			def _asm_shift(b):
 				b[reg_d] = _lambda_f(b[reg_t], shift)
 						
@@ -224,11 +248,7 @@ class InstructionAssembler(object):
 	def imm_TEMPLATE(self, func_name, args, _lambda_f):			
 		reg_t = self._parseRegister(args[0])
 		reg_s = self._parseRegister(args[1])
-
-		try:
-			immediate = int(args[2], 0)
-		except ValueError:
-			raise self.InvalidParameter
+		immediate = self._parseImmediate(args[2])
 
 		def _asm_imm(b):
 			b[reg_t] = _lambda_f(b[reg_s], immediate)
@@ -270,7 +290,8 @@ class InstructionAssembler(object):
 ############################################################			
 	def ins_add(self, args, unsigned = False):
 		"""
-			Opcode: 100000
+			Opcode: 000000
+			Fcode:  100000
 			Syntax: ArithLog
 		"""
 		add_name = 'addu' if unsigned else 'add'
@@ -280,7 +301,8 @@ class InstructionAssembler(object):
 		
 	def ins_addu(self, args):
 		"""
-			Opcode: 100001
+			Opcode: 000000
+			Fcode: 100001
 			Syntax: ArithLog
 		"""
 		return self.ins_add(args, True)
@@ -301,7 +323,8 @@ class InstructionAssembler(object):
 		
 	def ins_div(self, args, unsigned = False):
 		"""
-			Opcode: 011010
+			Opcode: 000000
+			Fcode: 011010
 			Syntax: DivMult
 		"""		
 		sign = u32 if unsigned else s32
@@ -322,14 +345,16 @@ class InstructionAssembler(object):
 	
 	def ins_divu(self, args):
 		"""
-			Opcode: 011011
+			Opcode: 000000
+			Fcode: 011011
 			Syntax: DivMult
 		"""
 		return self.ins_div(args, True)
 
 	def ins_mult(self, args, unsigned = False):
 		"""
-			Opcode: 011000
+			Opcode: 000000
+			Fcode: 011000
 			Syntax: DivMult
 		"""
 		sign = u32 if unsigned else s32
@@ -349,14 +374,16 @@ class InstructionAssembler(object):
 		
 	def ins_multu(self, args):
 		"""
-			Opcode: 011001
+			Opcode: 000000
+			Fcode: 011001
 			Syntax: DivMult
 		"""
 		return self.ins_mult(args, True)
 		
 	def ins_sub(self, args, unsigned = False):
 		"""
-			Opcode: 100010
+			Opcode: 000000
+			Fcode: 100010
 			Syntax: ArithLog
 		"""
 		sub_name = 'subu' if unsigned else 'sub'
@@ -366,7 +393,8 @@ class InstructionAssembler(object):
 
 	def ins_subu(self, args):
 		"""
-			Opcode: 100011
+			Opcode: 000000
+			Fcode: 100011
 			Syntax: ArithLog
 		"""
 		return self.ins_sub(args, True)			
@@ -376,7 +404,8 @@ class InstructionAssembler(object):
 ############################################################	
 	def ins_and(self, args):
 		"""
-			Opcode: 100100
+			Opcode: 000000
+			Fcode: 100100
 			Syntax: ArithLog
 		"""
 		return self.arith_TEMPLATE('and', args, lambda a, b: a & b)
@@ -390,14 +419,16 @@ class InstructionAssembler(object):
 		
 	def ins_nor(self, args):
 		"""
-			Opcode: 100111
+			Opcode: 000000
+			Fcode: 100111
 			Syntax: ArithLog
 		"""
 		return self.arith_TEMPLATE('nor', args, lambda a, b: ~(a | b))
 	
 	def ins_or(self, args):
 		"""
-			Opcode: 100101
+			Opcode: 000000
+			Fcode: 100101
 			Syntax: ArithLog
 		"""
 		return self.arith_TEMPLATE('or', args, lambda a, b: a | b)
@@ -411,7 +442,8 @@ class InstructionAssembler(object):
 		
 	def ins_xor(self, args):
 		"""
-			Opcode: 100110
+			Opcode: 000000
+			Fcode: 100110
 			Syntax: ArithLog
 		"""
 		return self.arith_TEMPLATE('xor', args, lambda a, b: a ^ b)
@@ -430,20 +462,23 @@ class InstructionAssembler(object):
 	def ins_sll(self, args):
 		"""
 			Opcode: 000000
+			Fcode: 000000
 			Syntax: Shift
 		"""
 		return self.shift_TEMPLATE('sll', args, True, lambda a, b: a << b)
 	
 	def ins_srl(self, args):
 		"""
-			Opcode: 000010
+			Opcode: 000000
+			Fcode: 000010
 			Syntax: Shift
 		"""
 		return self.shift_TEMPLATE('srl', args, True, lambda a, b: a >> b)
 		
 	def ins_sra(self, args):
 		"""
-			Opcode: 000011
+			Opcode: 000000
+			Fcode: 000011
 			Syntax: Shift
 		"""
 		return self.shift_TEMPLATE('sra', args, True, lambda a, b: s32(a) >> b)
@@ -451,21 +486,24 @@ class InstructionAssembler(object):
 # shifts with register
 	def ins_sllv(self, args):
 		"""
-			Opcode: 000100
+			Opcode: 000000
+			Fcode: 000100
 			Syntax: ShiftV
 		"""
 		return self.shift_TEMPLATE('sllv', args, False, lambda a, b: a << b)
 
 	def ins_srlv(self, args):
 		"""
-			Opcode: 000110
+			Opcode: 000000
+			Fcode: 000110
 			Syntax: ShiftV
 		"""
 		return self.shift_TEMPLATE('srlv', args, False, lambda a, b: a >> b)
 
 	def ins_srav(self, args):
 		"""
-			Opcode: 000111
+			Opcode: 000000
+			Fcode: 000111
 			Syntax: ShiftV
 		"""
 		return self.shift_TEMPLATE('srav', args, False, lambda a, b: s32(a) >> b)
@@ -476,14 +514,16 @@ class InstructionAssembler(object):
 ############################################################		
 	def ins_slt(self, args):
 		"""
-			Opcode: 101010
+			Opcode: 000000
+			Fcode: 101010
 			Syntax: ArithLog
 		"""
 		return self.arith_TEMPLATE('slt', args, lambda a, b: 1 if s32(a) < s32(b) else 0)
 		
 	def ins_sltu(self, args):
 		"""
-			Opcode: 101001
+			Opcode: 000000
+			Fcode: 101001
 			Syntax: ArithLog
 		"""
 		return self.arith_TEMPLATE('sltu', args, lambda a, b: 1 if u32(a) < u32(b) else 0)
@@ -497,7 +537,8 @@ class InstructionAssembler(object):
 		
 	def ins_slti(self, args):
 		"""
-			Opcode: 001010
+			Opcode: 000000
+			Fcode: 001010
 			Syntax: ArithLog
 		"""
 		return self.imm_TEMPLATE('slti', args, lambda a, b: 1 if s32(a) < b else 0)
@@ -572,16 +613,12 @@ class InstructionAssembler(object):
 			Syntax: LoadI
 		"""
 		reg_t = self._parseRegister(args[0])
-		
-		try:
-			value = int(args[2], 0) & 0xFFFF
-		except ValueError:
-			raise self.InvalidParameter
+		immediate = self._parseImmediate(args[1]) & 0xFFFF
 		
 		def _asm_lui(b):
-			b[reg_t] = (value << 16)
+			b[reg_t] = (immediate << 16)
 			
-		self.encoder(_asm_lui, 'lui', t = reg_t, imm = value)
+		self.encoder(_asm_lui, 'lui', t = reg_t, imm = immediate)
 			
 		return _asm_lui
 		
@@ -664,7 +701,8 @@ class InstructionAssembler(object):
 		
 	def ins_jr(self, args, link = False):
 		"""
-			Opcode: 001000
+			Opcode: 000000
+			Fcode: 001000
 			Syntax: JumpR
 		"""
 		reg_s = self._parseRegister(args[0])
@@ -687,7 +725,8 @@ class InstructionAssembler(object):
 
 	def ins_jalr(self, args):
 		"""
-			Opcode: 001001
+			Opcode: 000000
+			Fcode: 001001
 			Syntax: JumpR
 		"""
 		return self.ins_jr(args, True)
@@ -697,7 +736,8 @@ class InstructionAssembler(object):
 ############################################################
 	def ins_mflo(self, args):
 		"""
-			Opcode: 010010
+			Opcode: 000000
+			Fcode: 010010
 			Syntax: MoveFrom
 		"""
 		reg_d = self._parseRegister(args[0])
@@ -710,7 +750,8 @@ class InstructionAssembler(object):
 		
 	def ins_mfhi(self, args):
 		"""
-			Opcode: 010000
+			Opcode: 000000
+			Fcode: 010000
 			Syntax: MoveFrom
 		"""
 		reg_d = self._parseRegister(args[0])
@@ -723,7 +764,8 @@ class InstructionAssembler(object):
 		
 	def ins_mtlo(self, args):
 		"""
-			Opcode: 010011
+			Opcode: 000000
+			Fcode: 010011
 			Syntax: MoveTo
 		"""
 		reg_s = self._parseRegister(args[0])
@@ -736,7 +778,8 @@ class InstructionAssembler(object):
 		
 	def ins_mthi(self, args):
 		"""
-			Opcode: 010001
+			Opcode: 000000
+			Fcode: 010001
 			Syntax: MoveTo
 		"""
 		reg_s = self._parseRegister(args[0])
@@ -753,6 +796,7 @@ class InstructionAssembler(object):
 	def ins_nop(self, args):
 		"""
 			Opcode: 000000
+			Fcode: 000000
 			Syntax: None
 		"""		
 		def _asm_nop(b):
@@ -761,13 +805,50 @@ class InstructionAssembler(object):
 		self.encoder(_asm_nop, 'nop')
 		return _asm_nop
 		
+	def ins_mfc0(self, args):
+		"""
+			Opcode: 010000
+			Fcode: 000000
+			Syntax: mfc0 $t, $d
+			Encoding: R
+		"""
+		reg_t = self._parseRegister(args[0])
+		reg_d = self._parseRegister(args[1])
+		
+		def _asm_mfc0(b):
+			if b.CP0.getUserBit():
+				raise MIPS_Exception('RI')
+			b[reg_t] = b.CP0[reg_d]
+		
+		self.encoder(_asm_mfc0, 'mfc0', t = reg_t, d = reg_d)
+		return _asm_mfc0
+	
+	def ins_mtc0(self, args):
+		"""
+			Opcode: 010000
+			Fcode: 000000
+			Syntax: mtc0 $d, $t
+			Encoding: R
+		"""
+		reg_d = self._parseRegister(args[0])
+		reg_t = self._parseRegister(args[1])
+
+		def _asm_mtc0(b):
+			if b.CP0.getUserBit():
+				raise MIPS_Exception('RI')
+			b.CP0[reg_d] = b[reg_t]
+		
+		self.encoder(_asm_mtc0, 'mtc0', s = 4, d = reg_d, t = reg_t)
+		return _asm_mtc0
+		
 	def ins_syscall(self, args):
 		"""
-			Opcode: 100110
+			Opcode: 000000
+			Fcode: 100110
 			Syntax: None
 		"""
 		def _asm_syscall(b):
-			pass
+			raise MIPS_Exception("SYSCALL")
 		
 		self.encoder(_asm_syscall, 'syscall')
 		return _asm_syscall

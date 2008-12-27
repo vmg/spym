@@ -22,6 +22,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
+import sys
 
 def u32(i):
 	return i & 0xFFFFFFFF
@@ -61,3 +62,6 @@ def bindump(src, offset = 0, length = 16):
        result += "0x%08X | %-*s | %s\n" % (N, length*3, hexa, s)
        N+=length
     return result
+
+def _debug(msg):
+	sys.stderr.write(msg)

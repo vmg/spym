@@ -213,7 +213,7 @@ class MemoryManager(object):
 						output += "[0x%08X]    " % (address + i * 4)
 						output += "0x%08X  " % ins.mem_content
 						
-						text_output = ins.text.ljust(30) + "; " + ins.orig_text
+						text_output = ins.text.ljust(30) + "; " + (ins.orig_text if hasattr(ins, 'orig_text') else "")
 						output += text_output + "\n"
 						
 			elif isinstance(block, self.MemoryBlock):

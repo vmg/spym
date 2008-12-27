@@ -30,14 +30,16 @@ from spym.vm.preprocessor import AssemblyPreprocessor
 from spym.vm.instructions import InstructionAssembler
 from spym.vm.pseudoinstructions import PseudoInstructionAssembler
 	
+
+	
 class AssemblyParser(object):
 	"""Core for the assembly parsing routines."""
 	
 	TOKENIZER_REGEX = r"(?<![\(])[\s,]+(?!\s*?[\(\)])"
-			
-	class LabelException(Exception):
-		pass
 		
+	class ParsingFailed(Exception):
+		pass
+	
 	class ParserException(Exception):
 		pass
 	
@@ -45,7 +47,7 @@ class AssemblyParser(object):
 		self.memory = vm_memory
 		
 		self.preprocessor = AssemblyPreprocessor(self, vm_memory)
-		self.instruction_assembler = PseudoInstructionAssembler() if enablePseudoInsts else InstructionAssembler()
+		self.instruction_assembler = PseudoInstructionAssembler(self) if enablePseudoInsts else InstructionAssembler(self)
 		self.global_labels = {}
 		self.labels = {}
 		
@@ -53,10 +55,10 @@ class AssemblyParser(object):
 		
 	def __checkLabel(self, label):
 		if label in self.labels:
-			raise self.LabelException("Redefinition of label '%s'." % label)
+			raise self.ParserException("Redefinition of label '%s'." % label)
 		
 		if not re.match(r'^[^\d]\w+$', label):
-			raise self.LabelException("Malformed label.")
+			raise self.ParserException("Malformed label.")
 			
 	def parseFile(self, filename):
 		with open(filename, 'r') as asm_file:
@@ -66,51 +68,55 @@ class AssemblyParser(object):
 		self.__parse("_asm_buffer%02d" % self.parsedFiles, buff.split('\n'))
 		
 	def __parse(self, namespace, asm_contents):
-		local_labels = {}
+		self.local_labels = {}
 		local_instructions = []
 		self.cur_address = 0x0
 		
-		for line in asm_contents:
+		for (line_no, line) in enumerate(asm_contents):
+			line_no = line_no + 1
 			label, identifier, args = self.__parseLine(line)
 			args = args or []
 			
-			if label:
-				self.__checkLabel(label)
-				local_labels[label] = self.cur_address
+			try:
+				if label:
+					self.__checkLabel(label)
+					self.local_labels[label] = self.cur_address
 			
-			if identifier:
-				if identifier[0] == '.':
-					self.cur_address = self.preprocessor(identifier, args, self.cur_address)
-				else:
-					inst_code = self.instruction_assembler(identifier, args)
-					if not isinstance(inst_code, list):
-						inst_code = [inst_code, ]
-						
-					setattr(inst_code[0], 'orig_text', line.strip())
+				if identifier:
+					if identifier[0] == '.':
+						self.cur_address = self.preprocessor(identifier, args, self.cur_address)
+					else:
+						inst_code = self.instruction_assembler(identifier, args)
+						if not isinstance(inst_code, list):
+							inst_code = [inst_code, ]
+
+						setattr(inst_code[0], 'orig_text', "%03d:  %s" % (line_no, line.strip()))
 					
-					for inst in inst_code:
-						if hasattr(inst, '_inst_bld_tmp'):
-							local_instructions.append(inst)
+						for inst in inst_code:
+							if hasattr(inst, '_inst_bld_tmp'):
+								local_instructions.append(inst)
 											
-						self.memory[self.cur_address] = inst
-						self.cur_address += 0x4
+							self.memory[self.cur_address] = inst
+							self.cur_address += 0x4
+			except (self.ParserException, AssemblyPreprocessor.PreprocessorException, InstructionAssembler.InstructionAssemblerException), exc:
+				raise self.ParsingFailed("\nLINE %d:\t%s\n  %s" % (line_no, line.strip(), exc))
 						
 		self.parsedFiles += 1
 		
 		for instruction in local_instructions:
-			self.instruction_assembler.resolveLabels(instruction, local_labels)
+			self.instruction_assembler.resolveLabels(instruction, self.local_labels)
 		
 		for (label, address) in self.global_labels.items():
 			if address is None:
-				if label not in local_labels:
+				if label not in self.local_labels:
 					raise self.LabelException("Missing globally defined label '%s'" % label)
 
-				self.global_labels[label] = local_labels[label]
+				self.global_labels[label] = self.local_labels[label]
 			
 	def resolveGlobalDependencies(self):
 		for instruction in self.memory.getInstructionData():
 			if hasattr(instruction, '_inst_bld_tmp') and not self.instruction_assembler.resolveLabels(instruction, self.global_labels):
-				raise self.LabelException("Cannot resolve label in instruction '%s'" % str(instruction))
+				raise self.ParserException("Cannot resolve label in instruction '%s'" % str(instruction))
 		
 	def __parseLine(self, line):
 		line_label = None

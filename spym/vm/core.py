@@ -31,6 +31,8 @@ from spym.vm.assembler import AssemblyParser
 from spym.vm.regbank import RegisterBank
 from spym.vm.exceptions import EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
 
+from spym.common.utils import _debug
+
 class VirtualMachine(object):
 	
 	EXCEPTIONS = {
@@ -112,7 +114,7 @@ class VirtualMachine(object):
 		if exception.code not in self.EXCEPTIONS:
 			raise self.RuntimeVMException("Unknown MIPS exception raised.")
 			
-		print ("DEBUG: Raised MIPS exception '%s'" % exception.code)
+		_debug("DEBUG: Raised MIPS exception '%s'" % exception.code)
 						
 		code = self.EXCEPTIONS[exception.code]
 		
@@ -132,8 +134,8 @@ class VirtualMachine(object):
 		self.regBank.CP0.Cause &= ~0x3C
 		self.regBank.CP0.Cause |= (code << 2) # set exception code in the cause register
 		
-		self.regBank.Status &= ~0x1	# disable exceptions
-		self.regBank.Status &= ~0x2	# enter kernel mode
+		self.regBank.CP0.Status &= ~0x1	# disable exceptions
+		self.regBank.CP0.Status &= ~0x2	# enter kernel mode
 		self.regBank.CP0.EPC = self.regBank.PC	# save old PC
 		
 		self.regBank.PC = EXCEPTION_HANDLER_ADDR # jump to the exception handler
@@ -166,14 +168,13 @@ class VirtualMachine(object):
 		self.__initialize()
 		
 	def debugPrintAll(self):
-		print (str(self.memory))
+		_debug(str(self.memory))
 		
-		label_output = "Parsed labels:\n"
-		for (label, address) in self.parser.labels.items():
-			label_output += "[0x%08x]: '%s'" % (address, label)
-		label_output += "\n"
+		label_output = "Defined global labels:\n"
+		for (label, address) in self.parser.global_labels.items():
+			label_output += "    [0x%08x]: '%s'\n" % (address, label)
+		label_output += "\n\n"
 		
-		print (label_output)
-		
-		print (str(self.regBank))
+		_debug(label_output)
+		_debug(str(self.regBank))
 		
