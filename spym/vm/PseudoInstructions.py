@@ -22,15 +22,15 @@ class PseudoInstBuilder(InstBuilder):
 			
 		return args, []
 		
-	def buildFunction(self, func, args):
+	def __call__(self, func, args):
 		if func in self.IMM_PSEUDOINS:
 			args, _asm_immFunc = self.imm_pins_TEMPLATE(args, self.IMM_PSEUDOINS[func])
-			return _asm_immFunc + [InstBuilder.buildFunction(self, func, args),]
+			return _asm_immFunc + [InstBuilder.__call__(self, func, args),]
 			
 		if hasattr(self, 'pins_' + func):
 			return getattr(self, 'pins_' + func)(args)
 			
-		return InstBuilder.buildFunction(self, func, args)
+		return InstBuilder.__call__(self, func, args)
 
 	def pins_abs(self, args): # (x ^ (x>>31)) - (x>>31)
 		return [

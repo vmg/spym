@@ -41,9 +41,9 @@ class InstBuilder(object):
 		
 	def __init__(self):
 		self.encoder = InstructionEncoder(self)
-		self._initMetaData()
+		self.__initMetaData()
 		
-	def _initMetaData(self):
+	def __initMetaData(self):
 		for attr in dir(self):
 			if attr.startswith('ins_'):
 				func_name = attr[4:]
@@ -52,7 +52,7 @@ class InstBuilder(object):
 				if not func.__doc__:
 					raise self.SyntaxException("Missing syntax data for instruction '%s'." % func_name)
 					
-				encoding, argcount, opcode, syntax = self._parseSyntaxData(func_name, func.__doc__)
+				encoding, argcount, opcode, syntax = self.__parseSyntaxData(func_name, func.__doc__)
 				func.func_dict['encoding'] = encoding
 				func.func_dict['opcode'] = opcode
 				func.func_dict['syntax'] = syntax
@@ -60,7 +60,7 @@ class InstBuilder(object):
 				if argcount is not None:
 					func.func_dict['argcount'] = argcount
 		
-	def _parseSyntaxData(self, func_name, docstring):
+	def __parseSyntaxData(self, func_name, docstring):
 		opcode = None
 		syntax = None
 		encoding = None
@@ -88,6 +88,9 @@ class InstBuilder(object):
 			
 		if syntax is None:
 			raise self.SyntaxException("Cannot find syntax information for instruction '%s'" % func_name)
+			
+		if argcount is None:
+			argcount = len(syntax.split(',')) if syntax else 0
 
 		return (encoding, argcount, opcode, syntax)
 		
@@ -106,7 +109,7 @@ class InstBuilder(object):
 
 		return int(reg_match.group(1))
 			
-	def parseAddress(self, addr):
+	def _parseAddress(self, addr):
 		if not isinstance(addr, str):
 			raise self.InvalidParameter
 			
@@ -125,15 +128,20 @@ class InstBuilder(object):
 		return (immediate, register)
 		
 		
-	def buildFunction(self, func, args):
+	def __call__(self, func, args):
 		func = 'ins_' + func
 		
 		if not hasattr(self, func):
 			raise self.UnknownInstruction("Unknown instruction: '%s'" % func)
 		
-		return getattr(self, func)(args)
+		inst_builder = getattr(self, func)
 		
-	def completeFunction(self, func, labels):
+		if hasattr(inst_builder, 'argcount'):
+			self.__checkArguments(args, getattr(inst_builder, 'argcount'))
+			
+		return inst_builder(args)
+		
+	def resolveLabels(self, func, labels):
 		data = func._inst_bld_tmp
 		
 		func_name = data[1]
@@ -156,8 +164,6 @@ class InstBuilder(object):
 ###### Templates
 ############################################################
 	def arith_TEMPLATE(self, func_name, args, _lambda_f):
-		self.__checkArguments(args, 3)
-		
 		reg_d = self._parseRegister(args[0])
 		reg_s = self._parseRegister(args[1])
 		reg_t = self._parseRegister(args[2])
@@ -169,8 +175,6 @@ class InstBuilder(object):
 		return _asm_arith
 		
 	def shift_TEMPLATE(self, func_name, args, shift_imm, _lambda_f):
-		self.__checkArguments(args, 3)
-		
 		reg_d = self._parseRegister(args[0])
 		reg_t = self._parseRegister(args[1])
 		reg_s = 0
@@ -190,9 +194,7 @@ class InstBuilder(object):
 		return _asm_shift
 		
 		
-	def imm_TEMPLATE(self, func_name, args, _lambda_f):
-		self.__checkArguments(args, 3)
-			
+	def imm_TEMPLATE(self, func_name, args, _lambda_f):			
 		reg_t = self._parseRegister(args[0])
 		reg_s = self._parseRegister(args[1])
 
@@ -221,10 +223,8 @@ class InstBuilder(object):
 
 		return _asm_branch
 		
-	def storeload_TEMPLATE(self, func_name, args, size, unsigned = False):
-		self.__checkArguments(args, 2)
-		
-		imm, reg_s = self.parseAddress(args[1])
+	def storeload_TEMPLATE(self, func_name, args, size, unsigned = False):		
+		imm, reg_s = self._parseAddress(args[1])
 		reg_t = self._parseRegister(args[0])
 		
 		_sign_f = (lambda i, size: i) if unsigned else extsgn
@@ -277,9 +277,7 @@ class InstBuilder(object):
 		"""
 			Opcode: 011010
 			Syntax: DivMult
-		"""
-		self.__checkArguments(args, 2)
-		
+		"""		
 		sign = u32 if unsigned else s32
 		div_name = 'divu' if unsigned else 'div'
 		 
@@ -306,8 +304,6 @@ class InstBuilder(object):
 			Opcode: 011000
 			Syntax: DivMult
 		"""
-		self.__checkArguments(args, 2)
-		
 		sign = u32 if unsigned else s32
 		mult_name = 'multu' if unsigned else 'mult'
 		
@@ -487,7 +483,6 @@ class InstBuilder(object):
 			Opcode: 000100
 			Syntax: Branch
 		"""
-		self.__checkArguments(args, 3)
 		return self.branch_TEMPLATE('beq', args[2], args[0], args[1], lambda a, b: a == b)
 		
 	def ins_bne(self, args):
@@ -495,7 +490,6 @@ class InstBuilder(object):
 			Opcode: 000101
 			Syntax: Branch
 		"""
-		self.__checkArguments(args, 3)
 		return self.branch_TEMPLATE('bne', args[2], args[0], args[1], lambda a, b: a != b)
 		
 	def ins_bgez(self, args):
@@ -503,7 +497,6 @@ class InstBuilder(object):
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		self.__checkArguments(args, 2)
 		return self.branch_TEMPLATE('bgez', args[1], args[0], 0x1, lambda a, b: a >= 0)
 		
 	def ins_bgezal(self, args):
@@ -511,7 +504,6 @@ class InstBuilder(object):
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		self.__checkArguments(args, 2)
 		return self.branch_TEMPLATE('bgezal', args[1], args[0], 0x11, lambda a, b: a >= 0, True)
 		
 	def ins_bgtz(self, args):
@@ -519,7 +511,6 @@ class InstBuilder(object):
 			Opcode: 000111
 			Syntax: BranchZ
 		"""
-		self.__checkArguments(args, 2)
 		return self.branch_TEMPLATE('bgtz', args[1], args[0], 0, lambda a, b: a > 0)
 		
 	def ins_blez(self, args):
@@ -527,7 +518,6 @@ class InstBuilder(object):
 			Opcode: 000110
 			Syntax: BranchZ
 		"""
-		self.__checkArguments(args, 2)
 		return self.branch_TEMPLATE('blez', args[1], args[0], 0, lambda a, b: a <= 0)
 
 	def ins_bltz(self, args):
@@ -535,7 +525,6 @@ class InstBuilder(object):
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		self.__checkArguments(args, 2)
 		return self.branch_TEMPLATE('bltz', args[1], args[0], 0, lambda a, b: a < 0)
 
 	def ins_bltzal(self, args):
@@ -543,7 +532,6 @@ class InstBuilder(object):
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		self.__checkArguments(args, 2)
 		return self.branch_TEMPLATE('bltzal', args[1], args[0], 0x10, lambda a, b: a < 0, True)
 
 
@@ -555,7 +543,6 @@ class InstBuilder(object):
 			Opcode: 001111
 			Syntax: LoadI
 		"""
-		self.__checkArguments(args, 1)
 		reg_t = self._parseRegister(args[0])
 		
 		try:
@@ -635,7 +622,6 @@ class InstBuilder(object):
 			Opcode: 000010
 			Syntax: Jump
 		"""
-		self.__checkArguments(args, 1)
 		label = args[0]
 		
 		jmp_name = 'jal' if link else 'j'
@@ -654,7 +640,6 @@ class InstBuilder(object):
 			Opcode: 001000
 			Syntax: JumpR
 		"""
-		self.__checkArguments(args, 1)
 		reg_s = self._parseRegister(args[0])
 		
 		jr_name = 'jalr' if link else 'jr'
@@ -688,7 +673,6 @@ class InstBuilder(object):
 			Opcode: 010010
 			Syntax: MoveFrom
 		"""
-		self.__checkArguments(args, 1)
 		reg_d = self._parseRegister(args[0])
 		
 		def _asm_mflo(b):
@@ -702,7 +686,6 @@ class InstBuilder(object):
 			Opcode: 010000
 			Syntax: MoveFrom
 		"""
-		self.__checkArguments(args, 1)
 		reg_d = self._parseRegister(args[0])
 
 		def _asm_mfhi(b):
@@ -716,7 +699,6 @@ class InstBuilder(object):
 			Opcode: 010011
 			Syntax: MoveTo
 		"""
-		self.__checkArguments(args, 1)
 		reg_s = self._parseRegister(args[0])
 
 		def _asm_mtlo(b):
@@ -730,7 +712,6 @@ class InstBuilder(object):
 			Opcode: 010001
 			Syntax: MoveTo
 		"""
-		self.__checkArguments(args, 1)
 		reg_s = self._parseRegister(args[0])
 
 		def _asm_mthi(b):
@@ -746,9 +727,7 @@ class InstBuilder(object):
 		"""
 			Opcode: 000000
 			Syntax: None
-		"""
-		self.__checkArguments(args, 0)
-		
+		"""		
 		def _asm_nop(b):
 			pass
 		
@@ -760,8 +739,6 @@ class InstBuilder(object):
 			Opcode: 100110
 			Syntax: None
 		"""
-		self.__checkArguments(args, 0)
-		
 		def _asm_syscall(b):
 			pass
 		

@@ -25,13 +25,13 @@ class AssemblyParser(object):
 		self.memory = vm_memory
 		
 		self.preprocessor = AssemblyPreprocessor(self, vm_memory)
-		self.builder = PseudoInstBuilder() if enablePseudoInsts else InstBuilder()
+		self.instruction_assembler = PseudoInstBuilder() if enablePseudoInsts else InstBuilder()
 		self.global_labels = {}
 		self.labels = {}
 		
 		self.parsedFiles = 0
 		
-	def _checkLabel(self, label):
+	def __checkLabel(self, label):
 		if label in self.labels:
 			raise self.LabelException("Redefinition of label '%s'." % label)
 		
@@ -40,29 +40,29 @@ class AssemblyParser(object):
 			
 	def parseFile(self, filename):
 		with open(filename, 'r') as asm_file:
-			self._parse(filename, asm_file)
+			self.__parse(filename, asm_file)
 			
 	def parseBuffer(self, buff):
-		self._parse("_asm_buffer%02d" % self.parsedFiles, buff.split('\n'))
+		self.__parse("_asm_buffer%02d" % self.parsedFiles, buff.split('\n'))
 		
-	def _parse(self, namespace, asm_contents):
+	def __parse(self, namespace, asm_contents):
 		local_labels = {}
 		local_instructions = []
 		self.cur_address = 0x0
 		
 		for line in asm_contents:
-			label, identifier, args = self._parseLine(line)
+			label, identifier, args = self.__parseLine(line)
 			args = args or []
 			
 			if label:
-				self._checkLabel(label)
+				self.__checkLabel(label)
 				local_labels[label] = self.cur_address
 			
 			if identifier:
 				if identifier[0] == '.':
 					self.cur_address = self.preprocessor(identifier, args, self.cur_address)
 				else:
-					inst_code = self.builder.buildFunction(identifier, args)
+					inst_code = self.instruction_assembler(identifier, args)
 					if not isinstance(inst_code, list):
 						inst_code = [inst_code, ]
 						
@@ -78,7 +78,7 @@ class AssemblyParser(object):
 		self.parsedFiles += 1
 		
 		for instruction in local_instructions:
-			self.builder.completeFunction(instruction, local_labels)
+			self.instruction_assembler.resolveLabels(instruction, local_labels)
 		
 		for (label, address) in self.global_labels.items():
 			if address is None:
@@ -89,10 +89,10 @@ class AssemblyParser(object):
 			
 	def resolveGlobalDependencies(self):
 		for instruction in self.memory.getInstructionData():
-			if hasattr(instruction, '_inst_bld_tmp') and not self.builder.completeFunction(instruction, self.global_labels):
+			if hasattr(instruction, '_inst_bld_tmp') and not self.instruction_assembler.resolveLabels(instruction, self.global_labels):
 				raise self.LabelException("Cannot resolve label in instruction '%s'" % str(instruction))
 		
-	def _parseLine(self, line):
+	def __parseLine(self, line):
 		line_label = None
 		line_id = None
 		line_args = None

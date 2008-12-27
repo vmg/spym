@@ -33,7 +33,7 @@ class VirtualMachine(object):
 		if exceptionHandler and not os.path.isfile(exceptionHandler):
 			raise IOError("Invalid exception/trap file.")
 		
-		self._initialize()
+		self.__initialize()
 		
 	def run(self):
 		self.parser.resolveGlobalDependencies()
@@ -78,7 +78,7 @@ class VirtualMachine(object):
 	def getAccessMode(self):
 		return 'user' if self.regBank.CP0.getUserBit() else 'kernel'
 		
-	def _initialize(self):
+	def __initialize(self):
 		self.memory = MemoryManager(self, self.memoryBlockSize)
 		
 		self.parser = AssemblyParser(self.memory, self.enablePseudoInsts)
@@ -95,12 +95,12 @@ class VirtualMachine(object):
 			self.parser.parseFile(self.assembly)
 		
 		
-	def _reset(self):
+	def reset(self):
 		del(self.parser)
 		del(self.memory)
 		del(self.regBank)
 		
-		self._initialize()
+		self.__initialize()
 		
 	def debugPrintAll(self):
 		print str(self.memory)

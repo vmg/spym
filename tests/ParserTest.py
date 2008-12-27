@@ -27,7 +27,7 @@ class TestParser(unittest.TestCase):
 		]
 		
 		for (line, result) in testdata:
-			_, _, tokens = self.parser._parseLine(line)
+			_, _, tokens = self.parser._AssemblyParser__parseLine(line)
 			self.assertEqual(tokens, result)
 	
 	def testCommentParser(self):

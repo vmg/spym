@@ -190,7 +190,7 @@ class MemoryManager(object):
 			
 		return self.__setData(address, size, data)
 		
-	def _str_Segments(self, segments):
+	def __str_Segments(self, segments):
 		segments.sort()
 		current_section = None
 		output = ""
@@ -247,7 +247,7 @@ class MemoryManager(object):
 		
 		if self.memory:
 			memContents += "  * Block data:\n"
-			memContents += self._str_Segments(text_contents + data_contents) + "\n"
+			memContents += self.__str_Segments(text_contents + data_contents) + "\n"
 			
 		return memContents
 	

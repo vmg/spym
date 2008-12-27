@@ -31,17 +31,17 @@ class TestInstructionClosures(unittest.TestCase):
 		argList4 = ['$1', '$2', '$3', '$4']
 		
 		# integer-arithmetical
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_add, argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_add, argList2)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_add, argList4)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_addu, argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_add, argList4)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_div, argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_div, argList3)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_mult, argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_mult, argList3)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_sub, argList1)
-		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib.ins_sub, argList4)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList1)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList2)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList4)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'addu', argList1)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'add', argList4)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'div', argList1)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'div', argList3)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'mult', argList1)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'mult', argList3)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'sub', argList1)
+		self.assertRaises(InstBuilder.WrongArgumentCount, self.ib, 'sub', argList4)
 		
 	def testLoadStoreInstructions(self):
 		# check for parameter correctness
