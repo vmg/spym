@@ -82,6 +82,7 @@ class MemoryManager(object):
 		self.BLOCK_SIZE = blockSize
 		self.vm = vm
 		self.memory = {}
+		self.devices_memory_map = {}
 		
 	def __allocate(self, address):
 		if 'text' in self.getSegment(address):
@@ -100,6 +101,10 @@ class MemoryManager(object):
 			
 		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
 			raise MIPS_Exception('ADDRL', badaddr = address) # FIXME: is this the right exception?
+			
+		if address & ~0x3 in self.devices_memory_map:
+			device = self.devices_memory_map[address]
+			return device[address, size]
 		
 		if not self.__contains__(address):
 			return 0x0
@@ -110,10 +115,15 @@ class MemoryManager(object):
 		
 	def __setData(self, address, size, data):
 		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-			raise MIPS_Exception('ADDRS', badaddr = address)
+			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Invalid address %08X (%d)' % (address, size))
 			
 		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
-			raise MIPS_Exception('ADDRS', badaddr = address) # FIXME: is this the right exception?
+			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Attempted to write in protected space.') # FIXME: is this the right exception?
+			
+		if address & ~0x3 in self.devices_memory_map:
+			device = self.devices_memory_map[address]
+			device[address, size] = data
+			return
 		
 		if not self.__contains__(address):
 			self.__allocate(address)

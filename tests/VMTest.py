@@ -27,12 +27,17 @@ import unittest
 import testcommon
 
 from spym.vm import VirtualMachine
+#from spym.vm.devices import TerminalKeyboard, TerminalScreen
 
 class GlobalASMTests(unittest.TestCase):
 	def _runTest(self, asm, lab = True):
-		vm = VirtualMachine(asm, loadAsBuffer = lab, enablePseudoInsts = True, verboseSteps = True)
+		devicedata = [
+#			(TerminalScreen, {'delayed_io' : False})
+		]
+		
+		vm = VirtualMachine(asm, devices = devicedata, loadAsBuffer = lab, enablePseudoInsts = True, verboseSteps = False, runAsKernel = True)
 		vm.run()
-		vm.debugPrintAll()
+#		vm.debugPrintAll()
 		
 	def XXXtestASM2(self):
 		self._runTest('testprogram.s', False)
@@ -54,9 +59,11 @@ main:
 	ori $3, $0, 8
 	li $7, 4
 	lw $5, bdata+4($7)
-#	lw $5, 4($0)
 	addi $4, $3, 2
 	add $3, $7, 0x7FFFABC0
+	
+	li $7, 'X'
+	sb $7, +0xFFFF000C
 	
 	jr $ra
 """)

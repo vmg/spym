@@ -22,15 +22,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
-
-from __future__ import with_statement
-
-import re
-from spym.vm.preprocessor import AssemblyPreprocessor
-from spym.vm.instructions import InstructionAssembler
-from spym.vm.pseudoinstructions import PseudoInstructionAssembler
-	
-
+import re, os
 	
 class AssemblyParser(object):
 	"""Core for the assembly parsing routines."""
@@ -46,8 +38,16 @@ class AssemblyParser(object):
 	def __init__(self, vm_memory, enablePseudoInsts = True):
 		self.memory = vm_memory
 		
+		from spym.vm import AssemblyPreprocessor
 		self.preprocessor = AssemblyPreprocessor(self, vm_memory)
-		self.instruction_assembler = PseudoInstructionAssembler(self) if enablePseudoInsts else InstructionAssembler(self)
+		
+		if enablePseudoInsts:
+			from spym.vm import PseudoInstructionAssembler
+			self.instruction_assembler = PseudoInstructionAssembler(self)
+		else:
+			from spym.vm import InstructionAssembler
+			self.instruction_assembler = InstructionAssembler(self)
+			
 		self.global_labels = {}
 		self.labels = {}
 		
@@ -59,6 +59,12 @@ class AssemblyParser(object):
 		
 		if not re.match(r'^[^\d]\w+$', label):
 			raise self.ParserException("Malformed label.")
+			
+	def parse(self, asm):
+		if os.path.isfile(asm):
+			self.parseFile(asm)
+		else:
+			self.parseBuffer(asm)
 			
 	def parseFile(self, filename):
 		with open(filename, 'r') as asm_file:
@@ -98,7 +104,7 @@ class AssemblyParser(object):
 											
 							self.memory[self.cur_address] = inst
 							self.cur_address += 0x4
-			except (self.ParserException, AssemblyPreprocessor.PreprocessorException, InstructionAssembler.InstructionAssemblerException), exc:
+			except (self.ParserException, AssemblyPreprocessor.PreprocessorException, InstructionAssembler.InstructionAssemblerException) as exc:
 				raise self.ParsingFailed("\nLINE %d:\t%s\n  %s" % (line_no, line.strip(), exc))
 						
 		self.parsedFiles += 1

@@ -26,11 +26,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 import os.path
 import time
 
-from spym.vm.memory import MemoryManager
-from spym.vm.assembler import AssemblyParser
-from spym.vm.regbank import RegisterBank
-from spym.vm.exceptions import EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
-
+from spym.vm.exceptions import * #EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
 from spym.common.utils import _debug
 
 class VirtualMachine(object):
@@ -54,13 +50,23 @@ class VirtualMachine(object):
 	class RuntimeVMException(Exception):
 		pass
 		
-	def __init__(self, assembly, exceptionHandler = None, loadAsBuffer = False, enablePseudoInsts = True, memoryBlockSize = 32, verboseSteps = False):
+	def __init__(self, assembly, 
+					runAsKernel = False, 
+					devices = [], 
+					exceptionHandler = None, 
+					loadAsBuffer = False, 
+					enablePseudoInsts = True, 
+					memoryBlockSize = 32, 
+					verboseSteps = False):
+					
 		self.enablePseudoInsts = enablePseudoInsts
 		self.memoryBlockSize = memoryBlockSize
 		self.assembly = assembly
 		self.loadAsBuffer = loadAsBuffer
 		self.exceptionHandler = exceptionHandler
 		self.verboseSteps = verboseSteps
+		self.deviceInformation = devices
+		self.runAsKernel = runAsKernel
 		
 		self.breakpointed = False
 		self.started = False
@@ -88,10 +94,15 @@ class VirtualMachine(object):
 				self.regBank.CP0.Count = 0
 				raise MIPS_Exception('INT', int_id = 5)
 				
+	def __runDevices(self):
+		for device in self.devices_list:
+			device.tick()
+				
 	def __vm_loop(self):
 		while self.running:
 			try:
-				self.__clock(time.clock())
+#				self.__clock(time.clock())
+				self.__runDevices()
 
 				oldPC = self.regBank.PC
 				instruction = self.memory.getInstruction(self.regBank.PC)
@@ -107,8 +118,8 @@ class VirtualMachine(object):
 				
 				if oldPC == self.regBank.PC:
 					self.regBank.PC += 0x4
-				
-			except MIPS_Exception, cur_exception:
+			
+			except MIPS_Exception as cur_exception:
 				self.processException(cur_exception)
 		
 	def resume(self):
@@ -128,10 +139,13 @@ class VirtualMachine(object):
 		if not '__start' in self.parser.global_labels:
 			raise self.RuntimeVMException("Cannot find global '__start' label.")
 			
-		self.regBank.PC = self.parser.global_labels['__start']
-		self.regBank.CP0.Status |= 0x2
-		self.regBank.CP0.Compare = 1500
-		self.regBank[29] = 0x80000000 - 0xC
+		self.regBank.PC = self.parser.global_labels['__start'] # load PC with the default start
+		
+		if not self.runAsKernel:
+			self.regBank.CP0.Status |= 0x2 # enter user mode
+			
+		self.regBank.CP0.Compare = 1500 # clock ticks until next interrupt
+		self.regBank[29] = 0x80000000 - 0xC # stack pointer -- set a tad lower to fake argc and argv
 		
 		self.started = True
 		self.running = True
@@ -146,7 +160,7 @@ class VirtualMachine(object):
 		if exception.code not in self.EXCEPTIONS:
 			raise self.RuntimeVMException("Unknown MIPS exception raised.")
 			
-		_debug("DEBUG: Raised MIPS exception '%s'\n" % exception.code)
+		_debug("DEBUG: Raised MIPS exception '%s' (%s).\n" % (exception.code, exception.debug_msg))
 						
 		code = self.EXCEPTIONS[exception.code]
 		
@@ -166,8 +180,6 @@ class VirtualMachine(object):
 		elif code == 8: # syscall, hook for 'exit' (10)
 			if self.regBank[2] == 10:
 				self.running = False
-				
-#			return
 			
 		elif code == 9: # breakpoint hook, don't handle by OS
 			self.running = False
@@ -187,11 +199,28 @@ class VirtualMachine(object):
 		return 'user' if self.regBank.CP0.getUserBit() else 'kernel'
 		
 	def __initialize(self):
+		# core elements
+		from spym.vm import MemoryManager
 		self.memory = MemoryManager(self, self.memoryBlockSize)
 		
+		from spym.vm import AssemblyParser
 		self.parser = AssemblyParser(self.memory, self.enablePseudoInsts)
+
+		from spym.vm import RegisterBank		
 		self.regBank = RegisterBank(self.memory)
 		
+		# device initialization
+		self.devices_list = []
+		
+		for (device_class, device_params) in self.deviceInformation:
+			device_instance = device_class(len(devices_list), **device_params)
+			
+			for memory_address in device_instance._memory_map():
+				self.memory.devices_memory_map[memory_address] = device_instance
+			
+			self.devices_list.append(device_instance)
+			
+		# assembly loading / parsing
 		if self.exceptionHandler:
 			self.parser.parseFile(self.exceptionHandler)
 		else:
@@ -208,19 +237,23 @@ class VirtualMachine(object):
 		del(self.parser)
 		del(self.memory)
 		del(self.regBank)
+		del(self.devices_list)
 		
 		self.started = False
 		self.breakpointed = False
 		self.__initialize()
 		
-	def debugPrintAll(self):
-		_debug(str(self.memory))
+	def debugPrintAll(self, labels = True, memory = True, regbank = True):
+		if memory:
+			_debug(str(self.memory))
 		
-		label_output = "Defined global labels:\n"
-		for (label, address) in self.parser.global_labels.items():
-			label_output += "    [0x%08x]: '%s'\n" % (address, label)
-		label_output += "\n\n"
+		if labels:
+			label_output = "Defined global labels:\n"
+			for (label, address) in self.parser.global_labels.items():
+				label_output += "    [0x%08x]: '%s'\n" % (address, label)
+			label_output += "\n\n"
 		
-		_debug(label_output)
-		_debug(str(self.regBank))
-		
+			_debug(label_output)
+			
+		if regbank:
+			_debug(str(self.regBank))

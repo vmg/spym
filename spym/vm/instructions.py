@@ -24,10 +24,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 """""
 
 import re
-from spym.common.encoder import InstructionEncoder
-from spym.vm.regbank import RegisterBank
-from spym.vm.exceptions import MIPS_Exception
-
+from spym.vm import RegisterBank
+from spym.vm import MIPS_Exception
 from spym.common.utils import _debug, u32, s32, extsgn
 
 class InstructionAssembler(object):
@@ -61,7 +59,10 @@ class InstructionAssembler(object):
 		
 	def __init__(self, parser):
 		self.parser = parser
+		
+		from spym.common.encoder import InstructionEncoder
 		self.encoder = InstructionEncoder(self)
+		
 		self.assembler_register_protected = True
 		self.__initMetaData()
 		
@@ -148,6 +149,9 @@ class InstructionAssembler(object):
 		return register_id
 		
 	def _parseImmediate(self, imm):
+		if len(imm) == 3 and imm[0] == "'" and imm[2] == "'":
+			return ord(imm[1])
+			
 		try:
 			imm = int(imm, 0)
 		except (ValueError, TypeError):
@@ -283,10 +287,10 @@ class InstructionAssembler(object):
 		
 		if func_name[0] == 'l': # load instruction
 			def _asm_storeload(b):
-				b[reg_t] = _sign_f(b.memory[(imm + s32(b[reg_s])), size], size)
+				b[reg_t] = _sign_f(b.memory[(imm + u32(b[reg_s])), size], size)
 		elif func_name[0] == 's': # store instruction
 			def _asm_storeload(b):
-				b.memory[(imm + s32(b[reg_s])), size] = b[reg_t]
+				b.memory[(imm + u32(b[reg_s])), size] = b[reg_t]
 				
 		self.encoder(_asm_storeload, func_name, t = reg_t, s = reg_s, imm = imm)
 		return _asm_storeload

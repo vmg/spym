@@ -46,6 +46,20 @@ def extsgn(i, size):
 	size = (size * 8) - 1
 	return (i + (1 << size)) % (1 << (size + 1)) - (1 << size)
 	
+def getFromWord(word_register, offset, size = 4):	
+	offset = offset * 8
+	mask = (1 << (size * 8)) - 1
+	return (word_register >> offset) & mask
+	
+def breakAddress(address):
+	size = 4
+	if isinstance(address, tuple):
+		address, size = address
+	
+	offset = address & 0x3
+	address = address & ~0x3
+	
+	return (address, offset, size)
 
 def bin(n, count=24):
     """returns the binary of integer n, using count number of digits"""

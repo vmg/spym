@@ -23,8 +23,8 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 import re
-from spym.vm.instructions import InstructionAssembler
 from spym.common.utils import _debug
+from spym.vm import InstructionAssembler
 
 class PseudoInstructionAssembler(InstructionAssembler):
 	
@@ -38,12 +38,12 @@ class PseudoInstructionAssembler(InstructionAssembler):
 	}
 	
 	SELFASSIGN_PSEUDOINS = ['addi', 'addiu', 'andi', 'ori', 'xori']
-	
 	STORE_PSEUDOINS = ['sb', 'sh', 'sw', 'lb', 'lbu', 'lh', 'lhu', 'lw']
 		
 	def imm_pins_TEMPLATE(self, args, imm_parameter):
 		try:
 			self._parseRegister(args[imm_parameter])
+
 		except self.InstructionAssemblerException:
 			immediate = args[imm_parameter]
 			args[imm_parameter] = '$1'
@@ -83,7 +83,7 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		asm_output = self.pins_li(['$1', str(label_address + const_immediate)])
 		
 		if addr_register:
-			asm_output.append(InstructionAssembler.__call__(self, 'add', ['$1', '$1', "$%d" % addr_register]))
+			asm_output.append(super(PseudoInstructionAssembler, self)('add', ['$1', '$1', "$%d" % addr_register]))
 
 		args[1] = "0($1)"
 		return args, asm_output
@@ -106,7 +106,7 @@ class PseudoInstructionAssembler(InstructionAssembler):
 			#	addi $5, 0x1   ==>   addi $5, $5, 0x1
 			args = [args[0], args[0], args[1]]
 			
-		return _asm_extra_func + [InstructionAssembler.__call__(self, func, args)]
+		return _asm_extra_func + [super(PseudoInstructionAssembler, self)(self, func, args)]
 		
 		
 	def __call__(self, func, args):
@@ -125,7 +125,7 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		
 		self.assembler_register_protected = True # enable $1 protection again	
 
-		return pseudoinst_output or InstructionAssembler.__call__(self, func, args)
+		return pseudoinst_output or super(PseudoInstructionAssembler, self)(self, func, args)
 
 	def pins_abs(self, args): # (x ^ (x>>31)) - (x>>31)
 		"""
@@ -144,7 +144,7 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		Syntax: div $d, $s, $t
 		"""
 		if len(args) == 2:
-			return InstructionAssembler.__call__(self, 'div', args)
+			return super(PseudoInstructionAssembler, self)(self, 'div', args)
 			
 		args, _asm_immFunc = self.imm_pins_TEMPLATE(args, 2)
 		
