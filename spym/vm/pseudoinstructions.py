@@ -37,6 +37,8 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		'beq' 	: 1,	'bne' 	: 1,
 	}
 	
+	SELFASSIGN_PSEUDOINS = ['addi', 'addiu', 'andi', 'ori', 'xori']
+	
 	STORE_PSEUDOINS = ['sb', 'sh', 'sw', 'lb', 'lbu', 'lh', 'lhu', 'lw']
 		
 	def imm_pins_TEMPLATE(self, args, imm_parameter):
@@ -86,19 +88,34 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		args[1] = "0($1)"
 		return args, asm_output
 		
+	def __checkOverrideFunctions(self, func):
+		return (func in self.IMM_PSEUDOINS) or (func in self.STORE_PSEUDOINS) or (func in self.SELFASSIGN_PSEUDOINS)
+		
+	def __instructionOverride(self, func, args):
+		_asm_extra_func = []
+		
+		if func in self.IMM_PSEUDOINS:
+			args, _asm_extra_func = self.imm_pins_TEMPLATE(args, self.IMM_PSEUDOINS[func])
+		
+		elif func in self.STORE_PSEUDOINS:
+			args, _asm_extra_func = self.storeload_label_TEMPLATE(args)
+			
+		elif func in self.SELFASSIGN_PSEUDOINS and len(args) == 2:
+			# on immediate arithmetic functions, if the destination argument
+			# is missing, we assume source and destination to be the same. e.g.
+			#	addi $5, 0x1   ==>   addi $5, $5, 0x1
+			args = [args[0], args[0], args[1]]
+			
+		return _asm_extra_func + [InstructionAssembler.__call__(self, func, args)]
+		
 		
 	def __call__(self, func, args):
 		pseudoinst_output = []
 		self.assembler_register_protected = False # disable protection in $1 to encode pseudo-instructions
 		
-		if func in self.IMM_PSEUDOINS:
-			args, _asm_immFunc = self.imm_pins_TEMPLATE(args, self.IMM_PSEUDOINS[func])
-			pseudoinst_output += _asm_immFunc + [InstructionAssembler.__call__(self, func, args)]
-		
-		elif func in self.STORE_PSEUDOINS:
-			args, _asm_addressLoad = self.storeload_label_TEMPLATE(args)
-			pseudoinst_output += _asm_addressLoad + [InstructionAssembler.__call__(self, func, args)]
-			
+		if self.__checkOverrideFunctions(func):
+			pseudoinst_output += self.__instructionOverride(func, args)
+					
 		elif hasattr(self, 'pins_' + func):
 			func = 'pins_' + func
 			argcount = self.asm_metadata[func][1]

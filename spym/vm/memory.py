@@ -165,10 +165,10 @@ class MemoryManager(object):
 				
 		
 	def getInstructionData(self):
-		for block in self.memory.values():
+		for (address, block) in self.memory.items():
 			if isinstance(block, self.CodeBlock):
-				for ins in block.contents:
-					if ins: yield ins
+				for (addr_offset, ins) in enumerate(block.contents):
+					if ins: yield (address * self.BLOCK_SIZE + addr_offset * 0x4, ins)
 	
 	def clear(self):
 		del(self.memory)

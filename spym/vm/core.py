@@ -79,9 +79,7 @@ class VirtualMachine(object):
 				self.regBank.CP0.Count = 0
 				raise MIPS_Exception('INT', int_id = 5)
 		
-	def run(self):
-		self.parser.resolveGlobalDependencies()
-			
+	def run(self):			
 		if not '__start' in self.parser.global_labels:
 			raise self.RuntimeVMException("Cannot find global '__start' label.")
 			
@@ -159,6 +157,7 @@ class VirtualMachine(object):
 		else:
 			self.parser.parseFile(self.assembly)
 		
+		self.parser.resolveGlobalDependencies()
 		
 	def reset(self):
 		del(self.parser)

@@ -28,7 +28,7 @@ from spym.common.encoder import InstructionEncoder
 from spym.vm.regbank import RegisterBank
 from spym.vm.exceptions import MIPS_Exception
 
-from spym.common.utils import *
+from spym.common.utils import _debug, u32, s32, extsgn
 
 class InstructionAssembler(object):
 	
@@ -50,6 +50,7 @@ class InstructionAssembler(object):
 	  }
 	
 	LOADSTORE_ADDRESS_REGEX = r'(-?(?:0x)?[\da-fA-F]+)\((\$.*?)\)'
+	BRANCH_ENCODING_MOD = 0x4
 		
 	class SyntaxException(Exception):
 		pass
@@ -146,12 +147,9 @@ class InstructionAssembler(object):
 		return register_id
 		
 	def _parseImmediate(self, imm):
-		if isinstance(imm, int):
-			return imm
-
 		try:
 			imm = int(imm, 0)
-		except ValueError:
+		except (ValueError, TypeError):
 			raise self.InstructionAssemblerException("Invalid immediate value '%s'." % imm)
 			
 		return imm
@@ -187,7 +185,7 @@ class InstructionAssembler(object):
 			
 		return getattr(self, func)(args)
 		
-	def resolveLabels(self, func, labels):
+	def resolveLabels(self, func, func_addr, labels):
 		data = func._inst_bld_tmp
 		
 		func_name = data[1]
@@ -199,9 +197,16 @@ class InstructionAssembler(object):
 		func.label_address = labels[label]
 		
 		if data[0] == 'jump':
-			self.encoder(func, func_name, imm = u32(func.label_address >> 2), label = label)
-		elif data[0] == 'branch': # TODO: encoding for branch instructions
-			self.encoder(func, func_name, s = data[3], t = data[4], imm = 0xDEAD)
+			self.encoder(func, func_name, 
+				imm = u32(func.label_address >> 2), 
+				label = label)
+
+		elif data[0] == 'branch':
+			self.encoder(func, func_name, 
+				s = data[3], 
+				t = data[4], 
+				imm = u32((func.label_address - func_addr + self.BRANCH_ENCODING_MOD) >> 2), 
+				label = label)
 		
 		delattr(func, '_inst_bld_tmp')
 		return True
@@ -840,6 +845,19 @@ class InstructionAssembler(object):
 		
 		self.encoder(_asm_mtc0, 'mtc0', s = 4, d = reg_d, t = reg_t)
 		return _asm_mtc0
+		
+	def ins_rfe(self, args):
+		"""
+			Opcode: 000000
+			Fcode:	000000
+			Syntax: None
+		"""
+		
+		def _asm_rfe(b):
+			pass
+			
+		self.encoder(_asm_rfe, 'rfe')
+		return _asm_rfe
 		
 	def ins_syscall(self, args):
 		"""

@@ -29,12 +29,15 @@ import testcommon
 from spym.vm import VirtualMachine
 
 class GlobalASMTests(unittest.TestCase):
-	def _runTest(self, asm):
-		vm = VirtualMachine(asm, loadAsBuffer = True, enablePseudoInsts = True)
-		vm.run()
+	def _runTest(self, asm, lab = True):
+		vm = VirtualMachine(asm, loadAsBuffer = lab, enablePseudoInsts = True)
+#		vm.run()
 		vm.debugPrintAll()
 		
-	def testASM1(self):
+	def testASM2(self):
+		self._runTest('testprogram.s', False)
+		
+	def XXXtestASM1(self):
 		self._runTest(
 """
 .data

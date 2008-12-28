@@ -6,7 +6,7 @@ class MIPS_Exception(Exception):
 
 EXCEPTION_HANDLER_ADDR = 0x80000080
 
-EXCEPTION_HANDLER = \
+_EXCEPTION_HANDLER = \
 r"""
 	.text
 	.globl __start
@@ -26,7 +26,7 @@ __start:
 __eoth:
 """
 
-_EXCEPTION_HANDLER = \
+EXCEPTION_HANDLER = \
 r"""
 # Define the exception handling code.  This must go first!
 
