@@ -52,6 +52,7 @@ class AssemblyPreprocessor(object):
 		
 	def __segmentChange(self, args, segment):
 		self.__checkArgs(args, _max = 1)
+		self.align = None
 		
 		if not args:
 			return self.memory.getNextFreeBlock(self.memory.SEGMENT_DATA[segment][0])
@@ -70,7 +71,7 @@ class AssemblyPreprocessor(object):
 		if not string[0] == '"' or not string[-1] == '"':
 			raise self.PreprocessorException("Malformed string constant.")
 			
-		string = string[1:-1].replace(r'\n', '\n').replace(r'\"', '"')
+		string = string[1:-1].replace(r'\n', '\n').replace(r'\"', '"').replace(r'\t', '\t')
 		
 		for c in string:
 			self.memory[address, 1] = ord(c) & 0xFF
@@ -87,8 +88,7 @@ class AssemblyPreprocessor(object):
 			address += address % size
 		else:
 			address += address % (2 ** self.align)
-		
-		self.align = None
+
 		try:
 			for d in data:
 				if not d: continue

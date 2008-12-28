@@ -54,14 +54,16 @@ class VirtualMachine(object):
 	class RuntimeVMException(Exception):
 		pass
 		
-	def __init__(self, assembly, exceptionHandler = None, loadAsBuffer = False, enablePseudoInsts = True, memoryBlockSize = 32):
+	def __init__(self, assembly, exceptionHandler = None, loadAsBuffer = False, enablePseudoInsts = True, memoryBlockSize = 32, verboseSteps = False):
 		self.enablePseudoInsts = enablePseudoInsts
 		self.memoryBlockSize = memoryBlockSize
 		self.assembly = assembly
 		self.loadAsBuffer = loadAsBuffer
 		self.exceptionHandler = exceptionHandler
+		self.verboseSteps = verboseSteps
 		
 		self.breakpointed = False
+		self.started = False
 		
 		if not loadAsBuffer and not os.path.isfile(assembly):
 			raise IOError("Invalid assembly file.")
@@ -71,6 +73,13 @@ class VirtualMachine(object):
 		
 		self.__initialize()
 		
+	def __printStep(self, address, instruction):
+		output = "[0x%08X]    " % (address)
+		output += "0x%08X  " % instruction.mem_content
+		text_output = instruction.text.ljust(30) + "; " + (instruction.orig_text if hasattr(instruction, 'orig_text') else "")
+		
+		_debug(output + text_output + '\n')
+		
 	def __clock(self, curtime):
 		if (curtime - self.cpu_timer) * 1000 >= 10.0:
 			self.cpu_timer = curtime
@@ -78,19 +87,9 @@ class VirtualMachine(object):
 			if self.regBank.CP0.Count == self.regBank.CP0.Compare:
 				self.regBank.CP0.Count = 0
 				raise MIPS_Exception('INT', int_id = 5)
-		
-	def run(self):			
-		if not '__start' in self.parser.global_labels:
-			raise self.RuntimeVMException("Cannot find global '__start' label.")
-			
-		self.regBank.PC = self.parser.global_labels['__start']
-		self.regBank.CP0.Status |= 0x2
-		self.regBank.CP0.Compare = 50
-		self.regBank[29] = 0x80000000 - 0xC
-		
-		self.cpu_timer = time.clock()
-		
-		while 1:
+				
+	def __vm_loop(self):
+		while self.running:
 			try:
 				self.__clock(time.clock())
 
@@ -98,7 +97,11 @@ class VirtualMachine(object):
 				instruction = self.memory.getInstruction(self.regBank.PC)
 				
 				if not instruction:
+					_debug("Attempted to execute non-instruction at 0x%08X\n" % self.regBank.PC)
 					break
+					
+				if self.verboseSteps:
+					self.__printStep(self.regBank.PC, instruction)
 				
 				instruction(self.regBank)
 				
@@ -107,12 +110,43 @@ class VirtualMachine(object):
 				
 			except MIPS_Exception, cur_exception:
 				self.processException(cur_exception)
+		
+	def resume(self):
+		if not self.started or not self.breakpointed:
+			raise self.RuntimeVMException("Cannot resume execution -- execution not paused.")
+			
+		self.breakpointed = False
+		self.running = True
+		self.__vm_loop()
+		
+		return 1 if self.breakpointed else 0
+			
+	def run(self):
+		if self.started or self.breakpointed:
+			raise self.RuntimeVMException("Reset the Virtual Machine before running again the program.")
+			
+		if not '__start' in self.parser.global_labels:
+			raise self.RuntimeVMException("Cannot find global '__start' label.")
+			
+		self.regBank.PC = self.parser.global_labels['__start']
+		self.regBank.CP0.Status |= 0x2
+		self.regBank.CP0.Compare = 1500
+		self.regBank[29] = 0x80000000 - 0xC
+		
+		self.started = True
+		self.running = True
+		self.breakpointed = False
+		
+		self.cpu_timer = time.clock()
+		self.__vm_loop()
+		
+		return 1 if self.breakpointed else 0	
 				
 	def processException(self, exception):
 		if exception.code not in self.EXCEPTIONS:
 			raise self.RuntimeVMException("Unknown MIPS exception raised.")
 			
-		_debug("DEBUG: Raised MIPS exception '%s'" % exception.code)
+		_debug("DEBUG: Raised MIPS exception '%s'\n" % exception.code)
 						
 		code = self.EXCEPTIONS[exception.code]
 		
@@ -128,15 +162,26 @@ class VirtualMachine(object):
 			
 		elif code == 4 or code == 5: # memory access error
 			self.regBank.CP0.BadVAddr = exception.badaddr
+			
+		elif code == 8: # syscall, hook for 'exit' (10)
+			if self.regBank[2] == 10:
+				self.running = False
+				
+#			return
+			
+		elif code == 9: # breakpoint hook, don't handle by OS
+			self.running = False
+			self.breakpointed = True
+			return
 				
 		self.regBank.CP0.Cause &= ~0x3C
 		self.regBank.CP0.Cause |= (code << 2) # set exception code in the cause register
 		
 		self.regBank.CP0.Status &= ~0x1	# disable exceptions
-		self.regBank.CP0.Status &= ~0x2	# enter kernel mode
 		self.regBank.CP0.EPC = self.regBank.PC	# save old PC
 		
-		self.regBank.PC = EXCEPTION_HANDLER_ADDR # jump to the exception handler
+		self.regBank.CP0.Status &= ~0x2	# enter kernel mode
+		self.regBank.PC = EXCEPTION_HANDLER_ADDR # ...and jump to the exception handler
 		
 	def getAccessMode(self):
 		return 'user' if self.regBank.CP0.getUserBit() else 'kernel'
@@ -164,6 +209,8 @@ class VirtualMachine(object):
 		del(self.memory)
 		del(self.regBank)
 		
+		self.started = False
+		self.breakpointed = False
 		self.__initialize()
 		
 	def debugPrintAll(self):

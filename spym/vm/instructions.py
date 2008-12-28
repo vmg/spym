@@ -51,6 +51,7 @@ class InstructionAssembler(object):
 	
 	LOADSTORE_ADDRESS_REGEX = r'(-?(?:0x)?[\da-fA-F]+)\((\$.*?)\)'
 	BRANCH_ENCODING_MOD = 0x4
+	JAL_OFFSET = 0x4
 		
 	class SyntaxException(Exception):
 		pass
@@ -267,7 +268,7 @@ class InstructionAssembler(object):
 
 		def _asm_branch(b):
 			if _lambda_f(b[reg_s], b[reg_t]):
-				if link: b[31] = b.PC
+				if link: b[31] = b.PC + self.JAL_OFFSET
 				b.PC = _asm_branch.label_address
 			
 		setattr(_asm_branch, 'label_address', None)
@@ -697,7 +698,7 @@ class InstructionAssembler(object):
 		jmp_name = 'jal' if link else 'j'
 		
 		def _asm_j(b):
-			if link: b[31] = b.PC
+			if link: b[31] = b.PC + self.JAL_OFFSET
 			b.PC = _asm_j.label_address
 		
 		setattr(_asm_j, 'label_address', None)
@@ -715,7 +716,7 @@ class InstructionAssembler(object):
 		jr_name = 'jalr' if link else 'jr'
 		
 		def _asm_jr(b):
-			if link: b[31] = b.PC
+			if link: b[31] = b.PC + self.JAL_OFFSET
 			b.PC = b[reg_s]
 		
 		self.encoder(_asm_jr, jr_name, s = reg_s)
@@ -848,15 +849,19 @@ class InstructionAssembler(object):
 		
 	def ins_rfe(self, args):
 		"""
-			Opcode: 000000
-			Fcode:	000000
+			Opcode: 010000
+			Fcode:	010000
 			Syntax: None
 		"""
 		
 		def _asm_rfe(b):
-			pass
+			if b.CP0.getUserBit():
+				raise MIPS_Exception('RI')
 			
-		self.encoder(_asm_rfe, 'rfe')
+			b.CP0.Status |= 0x2 # back into user mode!
+			b.PC = b.CP0.EPC	# ...and back were we left it...
+			
+		self.encoder(_asm_rfe, 'rfe', s = 0x10)
 		return _asm_rfe
 		
 	def ins_syscall(self, args):

@@ -30,14 +30,14 @@ from spym.vm import VirtualMachine
 
 class GlobalASMTests(unittest.TestCase):
 	def _runTest(self, asm, lab = True):
-		vm = VirtualMachine(asm, loadAsBuffer = lab, enablePseudoInsts = True)
-#		vm.run()
+		vm = VirtualMachine(asm, loadAsBuffer = lab, enablePseudoInsts = True, verboseSteps = True)
+		vm.run()
 		vm.debugPrintAll()
 		
-	def testASM2(self):
+	def XXXtestASM2(self):
 		self._runTest('testprogram.s', False)
 		
-	def XXXtestASM1(self):
+	def testASM1(self):
 		self._runTest(
 """
 .data
@@ -57,6 +57,8 @@ main:
 #	lw $5, 4($0)
 	addi $4, $3, 2
 	add $3, $7, 0x7FFFABC0
+	
+	jr $ra
 """)
 
 if __name__ == '__main__':
