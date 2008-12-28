@@ -24,8 +24,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 """""
 
 import re
-from spym.vm import RegisterBank
-from spym.vm import MIPS_Exception
+from spym.vm.regbank import RegisterBank
+from spym.vm.exceptions import MIPS_Exception
 from spym.common.utils import _debug, u32, s32, extsgn
 
 class InstructionAssembler(object):

@@ -26,13 +26,13 @@ OTHER DEALINGS IN THE SOFTWARE.
 import unittest
 import testcommon
 
-from spym.vm import VirtualMachine
-#from spym.vm.devices import TerminalKeyboard, TerminalScreen
+from spym.vm.core import VirtualMachine
+from spym.vm.devices import TerminalKeyboard, TerminalScreen
 
 class GlobalASMTests(unittest.TestCase):
 	def _runTest(self, asm, lab = True):
 		devicedata = [
-#			(TerminalScreen, {'delayed_io' : False})
+			(TerminalScreen, {'delayed_io' : False})
 		]
 		
 		vm = VirtualMachine(asm, devices = devicedata, loadAsBuffer = lab, enablePseudoInsts = True, verboseSteps = False, runAsKernel = True)

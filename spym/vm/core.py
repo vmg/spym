@@ -200,20 +200,20 @@ class VirtualMachine(object):
 		
 	def __initialize(self):
 		# core elements
-		from spym.vm import MemoryManager
+		from spym.vm.memory import MemoryManager
 		self.memory = MemoryManager(self, self.memoryBlockSize)
 		
-		from spym.vm import AssemblyParser
+		from spym.vm.assembler import AssemblyParser
 		self.parser = AssemblyParser(self.memory, self.enablePseudoInsts)
 
-		from spym.vm import RegisterBank		
+		from spym.vm.regbank import RegisterBank		
 		self.regBank = RegisterBank(self.memory)
 		
 		# device initialization
 		self.devices_list = []
 		
 		for (device_class, device_params) in self.deviceInformation:
-			device_instance = device_class(len(devices_list), **device_params)
+			device_instance = device_class(len(self.devices_list), **device_params)
 			
 			for memory_address in device_instance._memory_map():
 				self.memory.devices_memory_map[memory_address] = device_instance

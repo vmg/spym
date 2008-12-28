@@ -38,14 +38,14 @@ class AssemblyParser(object):
 	def __init__(self, vm_memory, enablePseudoInsts = True):
 		self.memory = vm_memory
 		
-		from spym.vm import AssemblyPreprocessor
+		from spym.vm.preprocessor import AssemblyPreprocessor
 		self.preprocessor = AssemblyPreprocessor(self, vm_memory)
 		
 		if enablePseudoInsts:
-			from spym.vm import PseudoInstructionAssembler
+			from spym.vm.pseudoinstructions import PseudoInstructionAssembler
 			self.instruction_assembler = PseudoInstructionAssembler(self)
 		else:
-			from spym.vm import InstructionAssembler
+			from spym.vm.instructions import InstructionAssembler
 			self.instruction_assembler = InstructionAssembler(self)
 			
 		self.global_labels = {}
