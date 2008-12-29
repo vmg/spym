@@ -26,6 +26,7 @@ syscall_handler:
 	beq $v0, 0x1, syscall_print_int		# is print_int?
 	beq $v0, 0x4, syscall_print_string	# is print_string?
 	beq $v0, 0x5, syscall_read_int		# is read_int?
+	beq $v0, 0x8, syscall_read_string
 	j __sys_return						# ...we can't handle it yet otherwise
 	
 ###################################################
@@ -116,7 +117,30 @@ __sys_intread_finish:
 	
 	neg $v0, $v0						# otherwise get the negative of the number
 	j __sys_return
+
+###################################################
+### READ_STRING (syscall code 8) PROCEDURE		###
+###################################################
+syscall_read_string:
+	move $t1, $a0						# $t0 now contains the pointer to the bffer
+	move $t2, $a1						# $t1 now contains the buffer len
+	li $t6, 10							# load up '\n' as a constant for comparision
 	
+	addi $t2, $t2, -1					# len - 1 to save up for terminating byte
+	
+__sys_stread_loop:
+	jal __sys_io_getchar				# get new char in $v0
+	beq $v0, $t6, __sys_stread_finish	# if the char is ENDLINE, finish
+	sb $v0, 0($t1)						# store the char in our buffer
+	
+	addi $t1, $t1, 1					# increase buffer pointer
+	addi $t2, $t2, -1					# decrease len counter
+	
+	bne $t2, $zero, __sys_stread_loop	# if buffer is zero, we cant't take more chars
+	
+__sys_stread_finish:
+	sb $zero, 0($1)						# store NULL as terminating char
+	j __sys_return						# done!
 
 ###################################################
 ### MEMORY MAPPED IO PROCEDURES					###

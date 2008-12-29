@@ -37,9 +37,9 @@ class GlobalASMTests(unittest.TestCase):
 			enablePseudoInsts = True, 
 			verboseSteps = False, 
 			runAsKernel = False,
-			debugPoints = [0x800100DC])
+			debugPoints = [])
 		vm.run()
-		vm.debugPrintAll()
+#		vm.debugPrintAll()
 		
 	def XXXtestASM2(self):
 		self._runTest('testprogram.s', False)
@@ -55,6 +55,7 @@ test_string:
 	.asciiz "HELLO WORLD LULZ!"
 	
 .data 0x10040020
+_str_space:
 	.space 128
 	
 	.globl main
@@ -67,11 +68,13 @@ main:
 	addi $4, $3, 2
 	add $3, $7, 0x7FFFABC0
 	
-	li $v0, 5
+	la $a0, _str_space
+	li $a1, 128
+	li $v0, 8
 	syscall
 	
-	move $a0, $v0
-	li $v0, 1
+	la $a0, _str_space
+	li $v0, 4
 	syscall
 
 tlabel:

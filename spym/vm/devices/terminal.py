@@ -135,7 +135,7 @@ class TerminalKeyboard(object):
 		char_in = self.terminal_io.getch()
 		
 		if char_in:
-			print("\n\n\nCHARACTER IN\n\n\n")
+#			print("\n\n\nCHARACTER IN\n\n\n")
 			self.data_register = ord(char_in)
 			self.control_register |= 0x1
 			
