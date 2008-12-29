@@ -58,7 +58,7 @@ class AssemblyPreprocessor(object):
 			return self.memory.getNextFreeBlock(self.memory.SEGMENT_DATA[segment][0])
 			
 		try:
-			address = int(args[0], 0)
+			address = int(args[0], 16)
 		except ValueError:
 			raise self.PreprocessorException("Invalid address: '%s'" % args[0])
 		

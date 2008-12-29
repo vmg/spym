@@ -23,7 +23,10 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 import re, os
-	
+from spym.vm.preprocessor import AssemblyPreprocessor
+from spym.vm.pseudoinstructions import PseudoInstructionAssembler
+from spym.vm.instructions import InstructionAssembler
+
 class AssemblyParser(object):
 	"""Core for the assembly parsing routines."""
 	
@@ -37,15 +40,12 @@ class AssemblyParser(object):
 	
 	def __init__(self, vm_memory, enablePseudoInsts = True):
 		self.memory = vm_memory
-		
-		from spym.vm.preprocessor import AssemblyPreprocessor
+	
 		self.preprocessor = AssemblyPreprocessor(self, vm_memory)
 		
 		if enablePseudoInsts:
-			from spym.vm.pseudoinstructions import PseudoInstructionAssembler
 			self.instruction_assembler = PseudoInstructionAssembler(self)
 		else:
-			from spym.vm.instructions import InstructionAssembler
 			self.instruction_assembler = InstructionAssembler(self)
 			
 		self.global_labels = {}

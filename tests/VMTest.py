@@ -31,13 +31,15 @@ from spym.vm.devices import TerminalKeyboard, TerminalScreen
 
 class GlobalASMTests(unittest.TestCase):
 	def _runTest(self, asm, lab = True):
-		devicedata = [
-			(TerminalScreen, {'delayed_io' : False})
-		]
-		
-		vm = VirtualMachine(asm, devices = devicedata, loadAsBuffer = lab, enablePseudoInsts = True, verboseSteps = False, runAsKernel = True)
+		vm = VirtualMachine(asm, defaultMemoryMappedIO = True, 
+			virtualSyscalls = False, 
+			loadAsBuffer = lab, 
+			enablePseudoInsts = True, 
+			verboseSteps = False, 
+			runAsKernel = False,
+			debugPoints = [0x800100DC])
 		vm.run()
-#		vm.debugPrintAll()
+		vm.debugPrintAll()
 		
 	def XXXtestASM2(self):
 		self._runTest('testprogram.s', False)
@@ -49,6 +51,9 @@ class GlobalASMTests(unittest.TestCase):
 bdata: 
 	.word 0xAA, 0xBBBB, 0xCCCCCC, 0xDDDDDDDD
 
+test_string:
+	.asciiz "HELLO WORLD LULZ!"
+	
 .data 0x10040020
 	.space 128
 	
@@ -62,9 +67,14 @@ main:
 	addi $4, $3, 2
 	add $3, $7, 0x7FFFABC0
 	
-	li $7, 'X'
-	sb $7, +0xFFFF000C
+	li $v0, 5
+	syscall
 	
+	move $a0, $v0
+	li $v0, 1
+	syscall
+
+tlabel:
 	jr $ra
 """)
 

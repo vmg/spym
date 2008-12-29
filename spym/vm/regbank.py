@@ -73,7 +73,7 @@ class RegisterBank(object):
 			if item in self.REGISTER_NAMES:
 				return getattr(self, self.REGISTER_NAMES[item])
 			
-			elif hasattr(self, item):
+			elif isinstance(attr, str) and hasattr(self, item):
 				return getattr(self, item)
 				
 			return 0x0

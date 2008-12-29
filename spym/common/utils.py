@@ -79,3 +79,19 @@ def bindump(src, offset = 0, length = 16):
 
 def _debug(msg):
 	sys.stderr.write(msg)
+
+def buildLineOfCode(address, instruction):
+	RIGHT_MARGIN = 55
+	output = "[0x%08X]    0x%08X  %s" % (address, instruction.mem_content, instruction.text)
+	output = output.ljust(RIGHT_MARGIN) + "; "
+	
+	if hasattr(instruction, 'orig_text'):
+		text, comment = instruction.orig_text, ""
+		
+		if '#' in instruction.orig_text:
+			text, comment = text.split('#', 1)
+			comment = ' # ' + comment.strip()
+
+		output += text.strip().ljust(30) + comment
+	
+	return output + '\n'

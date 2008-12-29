@@ -271,7 +271,7 @@ class InstructionAssembler(object):
 		reg_t = self._parseRegister(t) if isinstance(t, str) else t
 
 		def _asm_branch(b):
-			if _lambda_f(b[reg_s], b[reg_t]):
+			if _lambda_f(s32(b[reg_s]), s32(b[reg_t])):
 				if link: b[31] = b.PC + self.JAL_OFFSET
 				b.PC = _asm_branch.label_address
 			
@@ -840,8 +840,8 @@ class InstructionAssembler(object):
 			Syntax: mtc0 $d, $t
 			Encoding: R
 		"""
-		reg_d = self._parseRegister(args[0])
-		reg_t = self._parseRegister(args[1])
+		reg_t = self._parseRegister(args[0])
+		reg_d = self._parseRegister(args[1])
 
 		def _asm_mtc0(b):
 			if b.CP0.getUserBit():

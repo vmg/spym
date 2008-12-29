@@ -27,9 +27,12 @@ import os.path
 import time
 
 from spym.vm.exceptions import * #EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
-from spym.common.utils import _debug
+from spym.common.utils import _debug, buildLineOfCode
 
 class VirtualMachine(object):
+	
+	SCREEN = 'screen'
+	KEYBOARD = 'keyboard'
 	
 	EXCEPTIONS = {
 		'INT' 	: 0,	# interrupt (hw or sw)
@@ -47,17 +50,20 @@ class VirtualMachine(object):
 		'OVF'	: 12,	# overflow
 	}
 	
-	class RuntimeVMException(Exception):
-		pass
-		
+	class RuntimeVMException(Exception): pass
+	class ConfigVMException(Exception): pass
+	
 	def __init__(self, assembly, 
-					runAsKernel = False, 
-					devices = [], 
+					runAsKernel = False,
+					defaultMemoryMappedIO = False,
+					memoryMappedDevices = {},
+					virtualSyscalls = True,
 					exceptionHandler = None, 
 					loadAsBuffer = False, 
 					enablePseudoInsts = True, 
 					memoryBlockSize = 32, 
-					verboseSteps = False):
+					verboseSteps = False,
+					debugPoints = []):
 					
 		self.enablePseudoInsts = enablePseudoInsts
 		self.memoryBlockSize = memoryBlockSize
@@ -65,11 +71,22 @@ class VirtualMachine(object):
 		self.loadAsBuffer = loadAsBuffer
 		self.exceptionHandler = exceptionHandler
 		self.verboseSteps = verboseSteps
-		self.deviceInformation = devices
+		self.deviceInformation = memoryMappedDevices
 		self.runAsKernel = runAsKernel
+		self.virtualSyscalls = virtualSyscalls
+		self.defaultMemoryMappedIO = defaultMemoryMappedIO
+		self.debugPoints = debugPoints
 		
 		self.breakpointed = False
 		self.started = False
+		
+		if defaultMemoryMappedIO:
+			from spym.vm.devices import TerminalScreen, TerminalKeyboard 
+			self.deviceInformation[self.SCREEN] = TerminalScreen
+			self.deviceInformation[self.KEYBOARD] = TerminalKeyboard
+			
+		# TODO: assert when having memory-mapped keyboards/screens and using
+		# syscalls to read or print shit.
 		
 		if not loadAsBuffer and not os.path.isfile(assembly):
 			raise IOError("Invalid assembly file.")
@@ -78,13 +95,6 @@ class VirtualMachine(object):
 			raise IOError("Invalid exception/trap file.")
 		
 		self.__initialize()
-		
-	def __printStep(self, address, instruction):
-		output = "[0x%08X]    " % (address)
-		output += "0x%08X  " % instruction.mem_content
-		text_output = instruction.text.ljust(30) + "; " + (instruction.orig_text if hasattr(instruction, 'orig_text') else "")
-		
-		_debug(output + text_output + '\n')
 		
 	def __clock(self, curtime):
 		if (curtime - self.cpu_timer) * 1000 >= 10.0:
@@ -112,7 +122,10 @@ class VirtualMachine(object):
 					break
 					
 				if self.verboseSteps:
-					self.__printStep(self.regBank.PC, instruction)
+					_debug(buildLineOfCode(self.regBank.PC, instruction))
+					
+				if self.regBank.PC in self.debugPoints:
+					_debug(str(self.regBank))
 				
 				instruction(self.regBank)
 				
@@ -160,7 +173,8 @@ class VirtualMachine(object):
 		if exception.code not in self.EXCEPTIONS:
 			raise self.RuntimeVMException("Unknown MIPS exception raised.")
 			
-		_debug("DEBUG: Raised MIPS exception '%s' (%s).\n" % (exception.code, exception.debug_msg))
+		if self.verboseSteps:
+			_debug("[ EXCEPTION]    Raised MIPS exception '%s' (%s).\n" % (exception.code, exception.debug_msg))
 						
 		code = self.EXCEPTIONS[exception.code]
 		
@@ -180,6 +194,8 @@ class VirtualMachine(object):
 		elif code == 8: # syscall, hook for 'exit' (10)
 			if self.regBank[2] == 10:
 				self.running = False
+			elif self.virtualSyscalls:
+				raise self.RuntimeVMException("Virtualized SYSCALLS are not implemented yet.")
 			
 		elif code == 9: # breakpoint hook, don't handle by OS
 			self.running = False
@@ -211,20 +227,42 @@ class VirtualMachine(object):
 		
 		# device initialization
 		self.devices_list = []
+		device_kb = None
+		device_scr = None
 		
-		for (device_class, device_params) in self.deviceInformation:
-			device_instance = device_class(len(self.devices_list), **device_params)
+		for (device_name, device) in self.deviceInformation.items():
+			device_params = {}
+			
+			if isinstance(device, tuple):
+				device, device_params = device
+	
+			device_instance = device(len(self.devices_list), **device_params)
 			
 			for memory_address in device_instance._memory_map():
 				self.memory.devices_memory_map[memory_address] = device_instance
 			
 			self.devices_list.append(device_instance)
 			
+			if device_name == self.KEYBOARD:
+				device_kb = device_instance
+			elif device_name == self.SCREEN:
+				device_scr = device_instance
+			
+		if not self.virtualSyscalls and (not device_kb or not device_scr):
+			raise self.ConfigVMException("Virtualized syscalls are disabled but there are no memory-mapped devices able to emulate their implementation.")	
+		
 		# assembly loading / parsing
 		if self.exceptionHandler:
 			self.parser.parseFile(self.exceptionHandler)
 		else:
-			self.parser.parseBuffer(EXCEPTION_HANDLER)
+			if not self.virtualSyscalls:
+				keyboard_address = min(device_kb._memory_map())
+				screen_address = min(device_scr._memory_map())
+				ktext = getKernelText(True, True, screen_address, keyboard_address)
+			else:
+				ktext = getKernelText(True, False)
+				
+			self.parser.parseBuffer(ktext)
 		
 		if self.loadAsBuffer:
 			self.parser.parseBuffer(self.assembly)

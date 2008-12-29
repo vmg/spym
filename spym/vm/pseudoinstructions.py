@@ -105,6 +105,13 @@ class PseudoInstructionAssembler(InstructionAssembler):
 			# is missing, we assume source and destination to be the same. e.g.
 			#	addi $5, 0x1   ==>   addi $5, $5, 0x1
 			args = [args[0], args[0], args[1]]
+		
+		elif func == 'div' and len(args) == 2:
+			# if this is a standard division with 2 args, we don't wanna override it
+			# with the pseudoinst with 3 params (stupid, I know)
+			# ...we just pass and let the super class parse it, so it doesn't get
+			# to the local 'pins_div', where it'll fail because of missing args
+			pass
 			
 		return _asm_extra_func + [super(PseudoInstructionAssembler, self).__call__(func, args)]
 		
@@ -138,20 +145,17 @@ class PseudoInstructionAssembler(InstructionAssembler):
 			self.ins_sub([args[0], args[0], '$1'])
 		]
 		
-	def pins_div(self, args, unsigned = False):
-		"""
-		Desc: Sets $d to the quotient of $s and $t, skipping the HI/LO registers.
-		Syntax: div $d, $s, $t
-		"""
-		if len(args) == 2:
-			return super(PseudoInstructionAssembler, self).__call__('div', args)
-			
-		args, _asm_immFunc = self.imm_pins_TEMPLATE(args, 2)
-		
-		return _asm_immFunc + [
-			InstructionAssembler.ins_div(self, args[1:], unsigned), # do the normal division with src1 and src2
-			self.ins_mflo([args[0]]),				 # move from LO to des the result	
-		]
+	# def pins_div(self, args, unsigned = False):
+	# 	"""
+	# 	Desc: Sets $d to the quotient of $s and $t, skipping the HI/LO registers.
+	# 	Syntax: div $d, $s, $t
+	# 	"""	
+	# 	args, _asm_immFunc = self.imm_pins_TEMPLATE(args, 2)
+	# 	
+	# 	return _asm_immFunc + [
+	# 		InstructionAssembler.ins_div(self, args[1:], unsigned), # do the normal division with src1 and src2
+	# 		self.ins_mflo([args[0]]),				 # move from LO to des the result	
+	# 	]
 		
 	def pins_mul(self, args, unsigned = False):
 		"""
@@ -199,7 +203,71 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		Syntax: bnez $s, label
 		"""
 		return [self.ins_bne([args[0], '$0', args[1]])]
+		
+	def pins_bge(self, args, unsigned = False):
+		"""
+		Desc: Branches to 'label' if $s >= $t.
+		Syntax: Branch
+		"""
+		reg_s, reg_t, label = args
+		
+		return [
+			self.ins_sub(['$1', reg_s, reg_t], unsigned),
+			self.ins_bgez(['$1', label]),
+		]
+		
+	def pins_bgt(self, args, unsigned = False):
+		"""
+		Desc: Branches to 'label' if $s > $t.
+		Syntax: Branch
+		"""
+		reg_s, reg_t, label = args
+
+		return [
+			self.ins_sub(['$1', reg_s, reg_t], unsigned),
+			self.ins_bgtz(['$1', label]),
+		]
+		
+	def pins_ble(self, args, unsigned = False):
+		"""
+		Desc: Branches to 'label' if $s <= $t.
+		Syntax: Branch
+		"""
+		reg_s, reg_t, label = args
+
+		return [
+			self.ins_sub(['$1', reg_s, reg_t], unsigned),
+			self.ins_blez(['$1', label]),
+		]
+
+	def pins_blt(self, args, unsigned = False):
+		"""
+		Desc: Branches to 'label' if $s < $t.
+		Syntax: Branch
+		"""
+		reg_s, reg_t, label = args
+
+		return [
+			self.ins_sub(['$1', reg_s, reg_t], unsigned),
+			self.ins_bltz(['$1', label]),
+		]
+		
+	def pins_bgeu(self, args):
+		"Syntax: Branch"
+		return self.pins_bge(args, True)
+
+	def pins_bgtu(self, args):          		
+		"Syntax: Branch"
+		return self.pins_bgt(args, True)
 	
+	def pins_bleu(self, args):          	
+		"Syntax: Branch"
+		return self.pins_ble(args, True)
+		
+	def pins_bltu(self, args):
+		"Syntax: Branch"
+		return self.pins_blt(args, True)
+				
 	def pins_move(self, args):
 		"""
 		Desc: Moves the contents of $s to $d.
@@ -227,13 +295,14 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		lower = immediate & 0xFFFF
 		upper = (immediate >> 16) & 0xFFFF
 			
-		if upper:
+		
+		if not immediate:
+			return [self.ins_or([args[0], '$0', '$0'])]
+		elif upper:
 			return [
 				self.ins_lui([args[0], str(upper)]),
 				self.ins_ori([args[0], args[0], str(lower)])
 			]
 		else:
-			return [
-				self.ins_ori([args[0], '$0', str(lower)]),
-			]
+			return [self.ins_ori([args[0], '$0', str(lower)]),]
 			

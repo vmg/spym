@@ -57,10 +57,14 @@ class InstructionEncoder(object):
 		if not syntax:
 			return ins_name.lower()
 			
+		label_repl = r'%(imm)d [%(label)s]'
+		imm = s32(imm)
+			
 		if encoding == 'J':
 			imm = (imm << 2)
+			label_repl = r'0x%(imm)08X [%(label)s]'
 		
-		syntax = syntax.replace('imm', r'%(imm)d').replace('label', r'0x%(imm)08X [%(label)s]')
+		syntax = syntax.replace('imm', r'%(imm)d').replace('label', label_repl)
 		syntax = syntax.replace('$d', r'$%(d)d').replace('$s', r'$%(s)d').replace('$t', r'$%(t)d')
 		syntax = syntax.replace('shift', r'%(a)d')
 		return ins_name.lower() + " " + syntax % {'s' : s, 't' : t, 'd' : d, 'a' : a, 'imm' : imm, 'label' : label}

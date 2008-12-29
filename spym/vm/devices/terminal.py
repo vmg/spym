@@ -1,5 +1,32 @@
+"""""
+Copyright (c) 2009 Vicent Marti
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+"""""
+
+
 import os, sys, tty
 from spym.vm.exceptions import MIPS_Exception
+from spym.common.utils import _debug
 from spym.common.utils import *
 from select import select
 
@@ -39,6 +66,7 @@ class TerminalScreen(object):
 		self.data_register = 0x0
 		self.delayed_io = delayed_io
 		self.interrupt_level = interrupt_level
+		self.delay_count = 0
 		
 		self.stdout = stdout or sys.stdout
 		
@@ -53,9 +81,9 @@ class TerminalScreen(object):
 		return (self.MAP_CTRL, self.MAP_DATA)
 
 	def tick(self):
-		if self.delayed_io and not self.control_register & 0x1:
+		if self.delayed_io and (self.control_register & 0x1) == 0:
 			self.delay_count = self.delay_count - 1
-			if not self.delay_count:
+			if self.delay_count == 0:
 				self.printCharacter()
 		
 	def __setitem__(self, addr, data):
@@ -84,10 +112,10 @@ class TerminalScreen(object):
 		if address == self.MAP_DATA:
 			return self.data_register & 0xFF
 		elif address == self.MAP_CTRL:
-			return self.data_register & 0xFF
+			return self.control_register & 0xFF
 		
 class TerminalKeyboard(object):
-	MAP_DATA = 0xFFFF0003
+	MAP_DATA = 0xFFFF0004
 	MAP_CTRL = 0xFFFF0000
 	
 	def __init__(self, interrupt_level, stdin = None):
@@ -95,17 +123,19 @@ class TerminalKeyboard(object):
 		self.control_register = 0x0
 		self.data_register = 0x0
 		
-		self.terminal_io = TerminalFile(stdin or sys.stdin)
+		self.terminal_io = TerminalFile(sys.stdin)
 		
 	def _memory_map(self):
 		return (self.MAP_DATA, self.MAP_CTRL)
 		
 	def tick(self):
+
 		# TODO: maybe make this blocking, i.e. don't allow to overwrite the character until
 		# the current one has been read
 		char_in = self.terminal_io.getch()
 		
 		if char_in:
+			print("\n\n\nCHARACTER IN\n\n\n")
 			self.data_register = ord(char_in)
 			self.control_register |= 0x1
 			
@@ -128,4 +158,4 @@ class TerminalKeyboard(object):
 			return self.data_register & 0xFF
 		
 		elif address == self.MAP_CTRL:
-			return self.data_register & 0xFF
+			return self.control_register & 0xFF

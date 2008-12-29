@@ -22,6 +22,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
+from spym.common.utils import buildLineOfCode
 from spym.vm.exceptions import MIPS_Exception
 
 class MemoryManager(object):
@@ -165,8 +166,11 @@ class MemoryManager(object):
 		
 	def getNextFreeBlock(self, address):		
 		while address in self:
-			contents = self.memory[address // self.BLOCK_SIZE].contents
-			if (isinstance(contents, int) and contents == 0) or not any(contents):
+			block = self.memory[address // self.BLOCK_SIZE]
+			if isinstance(block, self.CodeBlock) and not any(block.contents):
+				return address
+				
+			if isinstance(block, self.MemoryBlock) and block.contents == 0:
 				return address
 			
 			address += self.BLOCK_SIZE
@@ -219,13 +223,8 @@ class MemoryManager(object):
 			if isinstance(block, self.CodeBlock):			
 				for i in range(self.BLOCK_SIZE // 4):
 					ins = block.contents[i]
-					if ins:
-						output += "[0x%08X]    " % (address + i * 4)
-						output += "0x%08X  " % ins.mem_content
-						
-						text_output = ins.text.ljust(30) + "; " + (ins.orig_text if hasattr(ins, 'orig_text') else "")
-						output += text_output + "\n"
-						
+					if ins: output += buildLineOfCode((address + i * 4), ins)
+											
 			elif isinstance(block, self.MemoryBlock):
 				data = block.contents
 				
