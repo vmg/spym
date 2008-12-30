@@ -3,15 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>currentDocument</key>
-	<string>parser.py</string>
+	<string>spym/vm/core.py</string>
 	<key>documents</key>
 	<array>
-		<dict>
-			<key>filename</key>
-			<string>parser.py</string>
-			<key>lastUsed</key>
-			<date>2008-12-07T20:20:31Z</date>
-		</dict>
 		<dict>
 			<key>expanded</key>
 			<true/>
@@ -27,69 +21,84 @@
 	<integer>200</integer>
 	<key>metaData</key>
 	<dict>
-		<key>PYSMELLTAGS</key>
-		<dict>
-			<key>caret</key>
-			<dict>
-				<key>column</key>
-				<integer>0</integer>
-				<key>line</key>
-				<integer>0</integer>
-			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>0</integer>
-		</dict>
-		<key>memory.py</key>
-		<dict>
-			<key>caret</key>
-			<dict>
-				<key>column</key>
-				<integer>16</integer>
-				<key>line</key>
-				<integer>19</integer>
-			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>0</integer>
-		</dict>
-		<key>parser.py</key>
+		<key>spym/vm/core.py</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
 				<integer>2</integer>
 				<key>line</key>
-				<integer>23</integer>
+				<integer>111</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>15</integer>
+			<integer>108</integer>
 		</dict>
-		<key>spym_utils.py</key>
+		<key>spym/vm/devices/__init__.py</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>12</integer>
+				<integer>42</integer>
 				<key>line</key>
-				<integer>27</integer>
+				<integer>1</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
 			<integer>0</integer>
 		</dict>
+		<key>spym/vm/devices/clock.py</key>
+		<dict>
+			<key>caret</key>
+			<dict>
+				<key>column</key>
+				<integer>47</integer>
+				<key>line</key>
+				<integer>41</integer>
+			</dict>
+			<key>firstVisibleColumn</key>
+			<integer>0</integer>
+			<key>firstVisibleLine</key>
+			<integer>6</integer>
+		</dict>
+		<key>spym/vm/devices/terminal.py</key>
+		<dict>
+			<key>caret</key>
+			<dict>
+				<key>column</key>
+				<integer>5</integer>
+				<key>line</key>
+				<integer>77</integer>
+			</dict>
+			<key>firstVisibleColumn</key>
+			<integer>0</integer>
+			<key>firstVisibleLine</key>
+			<integer>76</integer>
+		</dict>
+		<key>tests/VMTest.py</key>
+		<dict>
+			<key>caret</key>
+			<dict>
+				<key>column</key>
+				<integer>0</integer>
+				<key>line</key>
+				<integer>61</integer>
+			</dict>
+			<key>firstVisibleColumn</key>
+			<integer>0</integer>
+			<key>firstVisibleLine</key>
+			<integer>33</integer>
+		</dict>
 	</dict>
 	<key>openDocuments</key>
 	<array>
-		<string>spym_utils.py</string>
-		<string>memory.py</string>
-		<string>PYSMELLTAGS</string>
-		<string>parser.py</string>
+		<string>tests/VMTest.py</string>
+		<string>spym/vm/core.py</string>
+		<string>spym/vm/devices/__init__.py</string>
+		<string>spym/vm/devices/clock.py</string>
+		<string>spym/vm/devices/terminal.py</string>
 	</array>
 	<key>showFileHierarchyDrawer</key>
 	<false/>
@@ -102,10 +111,48 @@
 			<key>isExpanded</key>
 			<true/>
 			<key>subItems</key>
-			<dict/>
+			<dict>
+				<key>spym</key>
+				<dict>
+					<key>isExpanded</key>
+					<true/>
+					<key>subItems</key>
+					<dict>
+						<key>common</key>
+						<dict>
+							<key>isExpanded</key>
+							<true/>
+							<key>subItems</key>
+							<dict/>
+						</dict>
+						<key>vm</key>
+						<dict>
+							<key>isExpanded</key>
+							<true/>
+							<key>subItems</key>
+							<dict>
+								<key>devices</key>
+								<dict>
+									<key>isExpanded</key>
+									<true/>
+									<key>subItems</key>
+									<dict/>
+								</dict>
+							</dict>
+						</dict>
+					</dict>
+				</dict>
+				<key>tests</key>
+				<dict>
+					<key>isExpanded</key>
+					<true/>
+					<key>subItems</key>
+					<dict/>
+				</dict>
+			</dict>
 		</dict>
 	</dict>
 	<key>windowFrame</key>
-	<string>{{118, 4}, {1227, 874}}</string>
+	<string>{{-86, -896}, {1440, 896}}</string>
 </dict>
 </plist>

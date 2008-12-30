@@ -23,62 +23,35 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 
-import unittest
-import testcommon
+import time
+from spym.vm.exceptions import MIPS_Exception
+from spym.common.utils import *
+from spym.common.utils import _debug
 
-from spym.vm.core import VirtualMachine
-from spym.vm.devices import TerminalKeyboard, TerminalScreen
-
-class GlobalASMTests(unittest.TestCase):
-	def _runTest(self, asm, lab = True):
-		vm = VirtualMachine(asm, 
-			defaultMemoryMappedIO = False, 
-			virtualSyscalls = True, 
-			loadAsBuffer = lab, 
-			enablePseudoInsts = True, 
-			verboseSteps = False, 
-			runAsKernel = True,
-			debugPoints = [])
-		vm.run()
-		vm.debugPrintAll()
+class CPUClock(object):
+	def __init__(self, int_level, frequency_hz = 1.0):
+		self.loop_time = (1.0 / frequency_hz)
+		self.timer = time.time()
+		self.int_enable = 0
+		self.clock_bit = 0
 		
-	def XXXtestASM2(self):
-		self._runTest('testprogram.s', False)
+	def _memory_map(self):
+		return (0xFFFF0010, )
 		
-	def testASM1(self):
-		self._runTest(
-"""
-.data
-bdata: 
-	.word 0xAA, 0xBBBB, 0xCCCCCC, 0xDDDDDDDD
-
-tick_string:
-	.asciiz "WE TICKED!"
-	
-.data 0x10040020
-	.space 128
-	
-	.globl main
-
-.text
-main:
-	li $t9, 0xFFFF0010
-
-clock_wait:
-	lb $t1, 0($t9)
-	andi $t1, $t1, 0x2
-	beq $t1, $zero, clock_wait
-	
-	sb $zero, 0($t9)
-	
-	la $a0, tick_string
-	li $v0, 4
-	syscall
-	j clock_wait
-
-tlabel:
-	jr $ra
-""")
-
-if __name__ == '__main__':
-	unittest.main()
+	def tick(self):
+		if time.time() - self.timer > self.loop_time:
+			self.timer = time.time()
+			self.clock_bit = 1
+			
+			if self.int_enable:
+				raise MIPS_Exception('INT', int_id = self.int_level, debug_msg = 'Tick!')
+			
+	def __getitem__(self, addr):
+		address, offset, size = breakAddress(addr)
+		return 0x0 if offset else ((self.clock_bit << 1) | self.int_enable)
+		
+	def __setitem__(self, addr, value):
+		address, offset, size = breakAddress(addr)
+		if offset == 0:
+			self.int_enable = value & 0x1
+			self.clock_bit = (value >> 1) & 0x1

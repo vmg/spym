@@ -23,8 +23,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 
-import os.path
-import time
+import os.path, time, sys, pdb
 
 from spym.vm.exceptions import * #EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
 from spym.common.utils import _debug, buildLineOfCode
@@ -33,6 +32,7 @@ class VirtualMachine(object):
 	
 	SCREEN = 'screen'
 	KEYBOARD = 'keyboard'
+	CLOCK = 'clock'
 	
 	EXCEPTIONS = {
 		'INT' 	: 0,	# interrupt (hw or sw)
@@ -63,7 +63,9 @@ class VirtualMachine(object):
 					enablePseudoInsts = True, 
 					memoryBlockSize = 32, 
 					verboseSteps = False,
-					debugPoints = []):
+					debugPoints = [],
+					standardInput = None,
+					standardOutput = None):
 					
 		self.enablePseudoInsts = enablePseudoInsts
 		self.memoryBlockSize = memoryBlockSize
@@ -80,10 +82,17 @@ class VirtualMachine(object):
 		self.breakpointed = False
 		self.started = False
 		
+		self.stdout = standardOutput or sys.stdout
+		self.stdin = standardInput or sys.stdin
+		
 		if defaultMemoryMappedIO:
 			from spym.vm.devices import TerminalScreen, TerminalKeyboard 
 			self.deviceInformation[self.SCREEN] = TerminalScreen
 			self.deviceInformation[self.KEYBOARD] = TerminalKeyboard
+			
+		if self.CLOCK not in self.deviceInformation:
+			from spym.vm.devices import CPUClock
+			self.deviceInformation[self.CLOCK] = CPUClock
 			
 		# TODO: assert when having memory-mapped keyboards/screens and using
 		# syscalls to read or print shit.
@@ -96,13 +105,50 @@ class VirtualMachine(object):
 		
 		self.__initialize()
 		
-	def __clock(self, curtime):
-		if (curtime - self.cpu_timer) * 1000 >= 10.0:
-			self.cpu_timer = curtime
-			self.regBank.CP0.Count += 1
-			if self.regBank.CP0.Count == self.regBank.CP0.Compare:
-				self.regBank.CP0.Count = 0
-				raise MIPS_Exception('INT', int_id = 5)
+	def __syscallVirtualization(self):
+		syscall_code = self.regBank[2] # v0 should contain the code for the syscall
+		
+		if syscall_code == 1:
+			self.stdout.write(str(self.regBank[4]))
+			
+		elif syscall_code == 4:
+			memory_ptr = self.regBank[4]
+			
+			while True:
+				out_char = self.memory[memory_ptr, 1]
+				if not out_char:
+					break
+					
+				self.stdout.write(chr(out_char))
+				memory_ptr += 1
+		
+		elif syscall_code == 5:
+			number = self.stdin.readline(16)
+			
+			try:
+				number = int(number, 0)
+			except ValueError:
+				raise self.RuntimeVMException("Invalid integer in READ_INT syscall.")
+				
+			self.regBank[2] = number
+		
+		elif syscall_code == 8:
+			in_str = self.stdin.readline(self.regBank[5])
+			if in_str.endswith('\n'):
+				in_str = in_str[0:-1]
+				
+			mem_ptr = self.regBank[4]
+			
+			for c in in_str:
+				self.memory[mem_ptr, 1] = ord(c)
+				mem_ptr += 1
+				
+			self.memory[mem_ptr, 1] = 0
+		
+		else:
+			raise self.RuntimeVMException("Unimplemented syscall code: %d" % syscall_code)
+			
+		self.stdout.flush() # hack: stdout gets clogged with the charspam, flush it after each syscall
 				
 	def __runDevices(self):
 		for device in self.devices_list:
@@ -111,7 +157,6 @@ class VirtualMachine(object):
 	def __vm_loop(self):
 		while self.running:
 			try:
-#				self.__clock(time.clock())
 				self.__runDevices()
 
 				oldPC = self.regBank.PC
@@ -125,7 +170,7 @@ class VirtualMachine(object):
 					_debug(buildLineOfCode(self.regBank.PC, instruction))
 					
 				if self.regBank.PC in self.debugPoints:
-					_debug(str(self.regBank))
+					pdb.set_trace()
 				
 				instruction(self.regBank)
 				
@@ -184,6 +229,7 @@ class VirtualMachine(object):
 			if not 0 <= int_id <= 5:
 				raise self.RuntimeVMException("Invalid interrupt source %d." % int_id)
 			
+			# if the global interrupt enable is on, and the source is not masked, flag a cause bit
 			if (self.regBank.CP0.Status & 0x1) and (self.regBank.CP0.Status & (1 << (int_id + 8))):
 				self.regBank.CP0.Cause |= (1 << (10 + int_id))
 			else: return
@@ -195,7 +241,9 @@ class VirtualMachine(object):
 			if self.regBank[2] == 10:
 				self.running = False
 			elif self.virtualSyscalls:
-				raise self.RuntimeVMException("Virtualized SYSCALLS are not implemented yet.")
+				self.__syscallVirtualization()
+				self.regBank.PC += 0x4 # skip syscall instruction...
+				return
 			
 		elif code == 9: # breakpoint hook, don't handle by OS
 			self.running = False
