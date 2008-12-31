@@ -59,6 +59,8 @@ class TerminalScreen(object):
 	MAP_CTRL = 0xFFFF0008
 	MAP_DATA = 0xFFFF000C
 	
+	_memory_map = (MAP_CTRL, MAP_DATA)
+	
 	SCREEN_WRITE_DELAY = 5
 	
 	def __init__(self, interrupt_level, stdout = None, delayed_io = True):
@@ -76,9 +78,6 @@ class TerminalScreen(object):
 		
 		if self.control_register & 0x2:
 			raise MIPS_Exception('INT', int_id = self.interrupt_level)
-		
-	def _memory_map(self):
-		return (self.MAP_CTRL, self.MAP_DATA)
 
 	def tick(self):
 		if self.delayed_io and (self.control_register & 0x1) == 0:
@@ -118,29 +117,26 @@ class TerminalKeyboard(object):
 	MAP_DATA = 0xFFFF0004
 	MAP_CTRL = 0xFFFF0000
 	
+	_memory_map = (MAP_CTRL, MAP_DATA)
+	
 	def __init__(self, interrupt_level, stdin = None):
 		self.interrupt_level = interrupt_level
 		self.control_register = 0x0
 		self.data_register = 0x0
 		
-		self.terminal_io = TerminalFile(sys.stdin)
-		
-	def _memory_map(self):
-		return (self.MAP_DATA, self.MAP_CTRL)
+#		self.terminal_io = TerminalFile(sys.stdin)
 		
 	def tick(self):
-
-		# TODO: maybe make this blocking, i.e. don't allow to overwrite the character until
-		# the current one has been read
-		char_in = self.terminal_io.getch()
-		
-		if char_in:
-#			print("\n\n\nCHARACTER IN\n\n\n")
-			self.data_register = ord(char_in)
-			self.control_register |= 0x1
-			
-			if self.control_register & 0x2:
-				raise MIPS_Exception('INT', int_id = self.interrupt_level)
+		pass
+		# pass
+		# char_in = self.terminal_io.getch()
+		# 
+		# if char_in:
+		# 	self.data_register = ord(char_in)
+		# 	self.control_register |= 0x1
+		# 	
+		# 	if self.control_register & 0x2:
+		# 		raise MIPS_Exception('INT', int_id = self.interrupt_level)
 		
 	def __setitem__(self, addr, data):
 		address, offset, size = breakAddress(addr)

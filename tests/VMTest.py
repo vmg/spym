@@ -32,12 +32,12 @@ from spym.vm.devices import TerminalKeyboard, TerminalScreen
 class GlobalASMTests(unittest.TestCase):
 	def _runTest(self, asm, lab = True):
 		vm = VirtualMachine(asm, 
-			defaultMemoryMappedIO = False, 
-			virtualSyscalls = True, 
+			defaultMemoryMappedIO = True, 
+			virtualSyscalls = False, 
 			loadAsBuffer = lab, 
 			enablePseudoInsts = True, 
 			verboseSteps = False, 
-			runAsKernel = True,
+			runAsKernel = False,
 			debugPoints = [])
 		vm.run()
 		vm.debugPrintAll()
@@ -47,13 +47,13 @@ class GlobalASMTests(unittest.TestCase):
 		
 	def testASM1(self):
 		self._runTest(
-"""
+r"""
 .data
 bdata: 
 	.word 0xAA, 0xBBBB, 0xCCCCCC, 0xDDDDDDDD
 
 tick_string:
-	.asciiz "WE TICKED!"
+	.asciiz "WE TICKED!\n"
 	
 .data 0x10040020
 	.space 128
@@ -62,18 +62,11 @@ tick_string:
 
 .text
 main:
-	li $t9, 0xFFFF0010
 
 clock_wait:
-	lb $t1, 0($t9)
-	andi $t1, $t1, 0x2
-	beq $t1, $zero, clock_wait
-	
-	sb $zero, 0($t9)
-	
-	la $a0, tick_string
-	li $v0, 4
-	syscall
+	nop
+	nop
+	nop
 	j clock_wait
 
 tlabel:

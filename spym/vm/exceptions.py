@@ -1,12 +1,17 @@
+from spym.common.utils import _debug
+
 class MIPS_Exception(Exception):
 	def __init__(self, code, int_id = None, badaddr = None, debug_msg = ''):
 		self.code = code
 		self.int_id = int_id
 		self.badaddr = badaddr
 		self.debug_msg = debug_msg
+		
+		Exception.__init__(self, debug_msg)
 
 EXCEPTION_HANDLER_ADDR 	= 0x80000080
-SYSCALL_HANDLER_ADDR 	= 0x80010000
+SYSCALL_HANDLER_ADDR 	= 0x80001000
+INTERRUPT_HANDLER_ADDR	= 0x80002000
 
 SYSCALL_HANDLER = \
 r"""
@@ -179,145 +184,168 @@ __sys_return:
 
 EXCEPTION_HANDLER = \
 r"""
-# Define the exception handling code.  This must go first!
-
 	.kdata
-__m1_:	.asciiz "  Exception "
-__m2_:	.asciiz " occurred and ignored\n"
-__e0_:	.asciiz "  [Interrupt] "
-__e1_:	.asciiz	"  [TLB]"
-__e2_:	.asciiz	"  [TLB]"
-__e3_:	.asciiz	"  [TLB]"
-__e4_:	.asciiz	"  [Address error in inst/data fetch] "
-__e5_:	.asciiz	"  [Address error in store] "
-__e6_:	.asciiz	"  [Bad instruction address] "
-__e7_:	.asciiz	"  [Bad data address] "
-__e8_:	.asciiz	"  [Error in syscall] "
-__e9_:	.asciiz	"  [Breakpoint] "
-__e10_:	.asciiz	"  [Reserved instruction] "
-__e11_:	.asciiz	""
-__e12_:	.asciiz	"  [Arithmetic overflow] "
-__e13_:	.asciiz	"  [Trap] "
-__e14_:	.asciiz	""
-__e15_:	.asciiz	"  [Floating point] "
-__e16_:	.asciiz	""
-__e17_:	.asciiz	""
-__e18_:	.asciiz	"  [Coproc 2]"
-__e19_:	.asciiz	""
-__e20_:	.asciiz	""
-__e21_:	.asciiz	""
-__e22_:	.asciiz	"  [MDMX]"
-__e23_:	.asciiz	"  [Watch]"
-__e24_:	.asciiz	"  [Machine check]"
-__e25_:	.asciiz	""
-__e26_:	.asciiz	""
-__e27_:	.asciiz	""
-__e28_:	.asciiz	""
-__e29_:	.asciiz	""
-__e30_:	.asciiz	"  [Cache]"
-__e31_:	.asciiz	""
-__excp:	.word __e0_, __e1_, __e2_, __e3_, __e4_, __e5_, __e6_, __e7_, __e8_, __e9_
-	.word __e10_, __e11_, __e12_, __e13_, __e14_, __e15_, __e16_, __e17_, __e18_,
-	.word __e19_, __e20_, __e21_, __e22_, __e23_, __e24_, __e25_, __e26_, __e27_,
-	.word __e28_, __e29_, __e30_, __e31_
-s1:	.word 0
-s2:	.word 0
+__register_storage:
+	.space 192 # enough space for 3 reentrancy levels. COOL.
 
-# This is the exception handler code that the processor runs when
-# an exception occurs. It only prints some information about the
-# exception, but can server as a model of how to write a handler.
-#
-# Because we are running in the kernel, we can use $k0/$k1 without
-# saving their old values.
+__exception_reentrant_ptr: 
+	.word __register_storage
+
+__interrupt_handlers_array:
+	%(int_handler_addresses)s
 
 	.ktext %(exception_handler_address)08X
+###################################################
+### CORE EXCEPTION HANDLER						###
+###################################################
+	la $k0, __exception_reentrant_ptr
+	lw $k1, 0($k0)		# load the current reentrancy pointer
 
+	# save all the important registers
+	# Save parameter registers, and temporaries for
+	# operations, and the RA so we can JAL
+	#	0	4	8	12	16	20	24	28	32	36	40	44
+	#	at	v0	a0	t0	t1	t2	t3	t4	t5	t6	t7	ra
 	.set noat
-	move $k1 $at		# Save $at
+	sw $at, 0($k1)		# Save $at
 	.set at
-	sw $v0 s1		# Not re-entrant and we can't trust $sp
-	sw $a0 s2		# But we need to use these registers
-
-	mfc0 $k0 $13		# Cause register
-	srl $t0 $k0 2		# Extract ExcCode Field
-	andi $t0 $t0 0x1f
+	sw $v0, 4($k1)
+	sw $a0, 8($k1)
+	sw $t0, 12($k1)
+	sw $t1, 16($k1)
+	sw $t2, 20($k1)
+	sw $t3, 24($k1)
+	sw $t4, 28($k1)
+	sw $t5, 32($k1)
+	sw $t6, 36($k1)
+	sw $t7, 40($k1)
 	
-	beq $t0, 0x8, %(syscall_jump_label)s # if code is 0x8, handle the syscall
-
-	# Print information about exception.
-	#
-	li $v0 4		# syscall 4 (print_str)
-	la $a0 __m1_
+	sw $sp, 44($k1)
+	sw $fp,	48($k1)
+	sw $ra,	52($k1)
+	
+	mfc0 $k0, $14
+	sw $k0, 56($k1)
+	
+	mfc0 $k0, $8
+	sw $k0, 60($k1)
+	
+	# increase reentrancy
+	addi $k0, $k1, 64		# increase the reentrancy pointer by 64 to point to the next storage zone
+	sw $k0, __exception_reentrant_ptr
+	
+	mfc0 $k0 $13		# Cause register
+	srl $k0 $k0 2		# Extract ExcCode Field
+	andi $k0 $k0 0x1f
+	
+	beq $k0, 0x8, %(syscall_jump_label)s # if code is 0x8, handle the syscall
+	beq $k0, $0, interrupt_switcher	# if code is 0x0, handle the interrupt
+#	j ret_fromexception
+	
+unhandled_exception:
+# TODO: handle other exceptions; otherwise we just crash the VM
+	li $v0, 17	# exit2 syscall
+	move $a0, $k0 # exit with exception code as error code
 	syscall
 
-	li $v0 1		# syscall 1 (print_int)
-	srl $a0 $k0 2		# Extract ExcCode Field
-	andi $a0 $a0 0x1f
-	syscall
 
-	li $v0 4		# syscall 4 (print_str)
-	andi $a0 $k0 0x3c
-	lw $a0 __excp($a0)
-	nop
-	syscall
+###################################################
+### INTERRUPT SELECTION CODE					###
+###################################################
+interrupt_switcher:
+	mfc0 $k0, $13	# load cause register
+	srl $k0, $k0, 8	# move to lowest bit the start of PENDING INSTRUCTIONS
+	li $t1, 0		# inst counter
+	
+__intswitch_loop:
+	andi $t2, $k0, 0x1
+	bne  $t2, $zero, __intswitch_found
+	
+	srl $k0, $k0, 1
+	addi $t1, $t1, 1
+	j __intswitch_loop
+	
+__intswitch_found:
+	# $1 now contains the interrupt id (0-7)
+	sll $t1, $t1, 2		# multiply by 4 to get the offset on the array
+	la $k0, __interrupt_handlers_array # get the start of the array
+	add $k0, $k0, $t1	# add the offset to the start address, store in $k0
+	
+	lw $k0, 0($k0) # get the word in the array with our jump address
+	
+	beq $k0, $0, ret_frominterrupt # if interrupt address is 0, skip handling
+	jalr $k0			# jump to the handler code and link
 
-	bne $k0 0x18 ok_pc	# Bad PC exception requires special checks
-	nop
 
-	mfc0 $a0 $14		# EPC
-	andi $a0 $a0 0x3	# Is EPC word-aligned?
-	beq $a0 0 ok_pc
-	nop
-
-	li $v0 10		# Exit on really bad PC
-	syscall
-
-ok_pc:
-	li $v0 4		# syscall 4 (print_str)
-	la $a0 __m2_
-	syscall
-
-	srl $a0 $k0 2		# Extract ExcCode Field
-	andi $a0 $a0 0x1f
-	bne $a0 0 ret		# 0 means exception was an interrupt
-	nop
-
-# Interrupt-specific code goes here!
-# Don't skip instruction at EPC since it has not executed.
-
-ret:
-# Return from (non-interrupt) exception. Skip offending instruction
-# at EPC to avoid infinite loop.
-#
-	lw $v0 s1		# Restore other registers
-	lw $a0 s2
-
-ret_fromsyscall:
-	mfc0 $k0 $14		# Bump EPC register
-	addiu $k0 $k0 4		# Skip faulting instruction
-				# (Need to handle delayed branch case here)
+###################################################
+### EXCEPTION HANDLER CLEANUP/RESTORE			###
+###################################################
+# if we return from interrupt, we do not want to bump EPC, instruction hasn't been executed yet
+ret_fromexception:
+ret_frominterrupt:
+	la $k0, __exception_reentrant_ptr
+	lw $k1, 0($k0)		# load the current reentrancy pointer
+	addi $k1, $k1, -64
+	
+	lw $v0 4($k1)		# Restore parameter registers
+	lw $a0 8($k1)
+	
+	lw $k0, 56($k1)	# restore EPC even if we don't bump it!!
 	mtc0 $k0 $14
+	
+	j ret_restoreall
 
-# Restore registers and reset procesor state
+# if we return from syscall, we don't need to restore $a0 and $v0 (those are interrupt params)
+# we do need to skip the instruction
+ret_fromsyscall:
+	la $k0, __exception_reentrant_ptr
+	lw $k1, 0($k0)		# load the current reentrancy pointer
+	addi $k1, $k1, -64 # set to current
+	
+	lw $k0, 56($k1)	# restore EPC before bumping it!
+	addiu $k0 $k0 4		# Skip faulting instruction
+	mtc0 $k0 $14
+	
+ret_restoreall:
+	lw $t0, 12($k1)
+	lw $t1, 16($k1)
+	lw $t2, 20($k1)
+	lw $t3, 24($k1)
+	lw $t4, 28($k1)
+	lw $t5, 32($k1)
+	lw $t6, 36($k1)
+	lw $t7, 40($k1)
+	
+	lw $sp, 44($k1)
+	lw $fp,	48($k1)
+	lw $ra,	52($k1)
 
-	.set noat
-	move $at $k1		# Restore $at
-	.set at
+	lw $k0, 60($k1) # restore BadVAddr
+	mtc0 $k0, $8
 
 	mtc0 $0 $13		# Clear Cause register
 
-	mfc0 $k0 $12		# Set Status register
-	ori  $k0 0x1		# Interrupts enabled
-	mtc0 $k0 $12
+	# since we are done with this exception,
+	# the pointer may now point to the space
+	# we were using... basically decreasing
+	# the active pointer by 64
+	sw $k1, __exception_reentrant_ptr # save the exception reentrancy pointer
 
+	.set noat
+	lw $at, 0($k1)		# Restore $at
+	.set at				# WARNING: Do not use pseudoinsts until you quit the handler
+	
+	mfc0 $k0, $14		# take out the EPC, it should be restored by now
+	
 # Return sequence for MIPS-I (R2000):
-	rfe
-	jr $k0	 
-	nop
+	rfe				# leave excpetion handler, bits are shifted back and such
+	jr $k0	 		# bang, jump back into code
+	nop				# Note that this is hacked so RFE hits on a main instruction
+					# and the JR hits on the delay slot (I'm hoping this works)
+					# like this on a normal processor.
 
 # Standard startup code.  Invoke the routine "main" with arguments:
 #	main(argc, argv, envp)
-#
 	.text
 	.globl __start
 __start:
@@ -336,14 +364,37 @@ __start:
 __eoth:
 """
 
-def getKernelText(exception_handler = True, syscall_handler = True, memmap_screen = 0x0, memmap_keyboard = 0x0):
+def parseInterruptHandlers(handler_list):
+	handler_text = \
+	r"""
+		.ktext %(int_handler_start)08X	
+	""" % {'int_handler_start' : INTERRUPT_HANDLER_ADDR}
+	
+	label_names = ["0x0", ] * 8
+	for (int_id, htext, hlabel) in handler_list:		
+		if hlabel not in htext:
+			htext = hlabel + ':\n\n' + htext
+
+		label_names[int_id + 2] = hlabel
+		handler_text += htext
+	
+	int_handler_addresses = ".word " + ", ".join(label_names)
+	return handler_text, int_handler_addresses
+
+def getKernelText(exception_handler = True, syscall_handler = True, interrupt_handlers = [], memmap_screen = 0x0, memmap_keyboard = 0x0):
 	kernel_text = ""
+	int_handler_addresses = ""
+	
+	if interrupt_handlers:
+		handler_text, int_handler_addresses = parseInterruptHandlers(interrupt_handlers)
+		kernel_text += handler_text
 	
 	if exception_handler:
 		kernel_text += EXCEPTION_HANDLER % {
 			'exception_handler_address' : EXCEPTION_HANDLER_ADDR,
 			'syscall_handler_address' : SYSCALL_HANDLER_ADDR,
-			'syscall_jump_label' : 'syscall_handler' if syscall_handler else 'ret'
+			'syscall_jump_label' : 'syscall_handler' if syscall_handler else 'unhandled_exception',
+			'int_handler_addresses' : int_handler_addresses,
 		}
 
 	if syscall_handler:

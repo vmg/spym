@@ -26,13 +26,15 @@ OTHER DEALINGS IN THE SOFTWARE.
 import os.path, time, sys, pdb
 
 from spym.vm.exceptions import * #EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
-from spym.common.utils import _debug, buildLineOfCode
+from spym.common.utils import _debug, buildLineOfCode, bin
 
 class VirtualMachine(object):
 	
 	SCREEN = 'screen'
 	KEYBOARD = 'keyboard'
 	CLOCK = 'clock'
+	L1_CACHE = 'l1cache'
+	L2_CACHE = 'l2cache'
 	
 	EXCEPTIONS = {
 		'INT' 	: 0,	# interrupt (hw or sw)
@@ -65,7 +67,8 @@ class VirtualMachine(object):
 					verboseSteps = False,
 					debugPoints = [],
 					standardInput = None,
-					standardOutput = None):
+					standardOutput = None,
+					enableDelaySlot = True):
 					
 		self.enablePseudoInsts = enablePseudoInsts
 		self.memoryBlockSize = memoryBlockSize
@@ -78,9 +81,11 @@ class VirtualMachine(object):
 		self.virtualSyscalls = virtualSyscalls
 		self.defaultMemoryMappedIO = defaultMemoryMappedIO
 		self.debugPoints = debugPoints
+		self.enableDelaySlot = enableDelaySlot
 		
 		self.breakpointed = False
 		self.started = False
+		self.doStep = False
 		
 		self.stdout = standardOutput or sys.stdout
 		self.stdin = standardInput or sys.stdin
@@ -91,17 +96,17 @@ class VirtualMachine(object):
 			self.deviceInformation[self.KEYBOARD] = TerminalKeyboard
 			
 		if self.CLOCK not in self.deviceInformation:
-			from spym.vm.devices import CPUClock
-			self.deviceInformation[self.CLOCK] = CPUClock
-			
-		# TODO: assert when having memory-mapped keyboards/screens and using
-		# syscalls to read or print shit.
+			from spym.vm.devices import CPUClock_TIMER
+			self.deviceInformation[self.CLOCK] = CPUClock_TIMER
+
+		if defaultMemoryMappedIO and virtualSyscalls:
+			raise self.ConfigVMException("Cannot virtualize I/O syscalls when memory mapped I/O is enabled.")
 		
 		if not loadAsBuffer and not os.path.isfile(assembly):
-			raise IOError("Invalid assembly file.")
+			raise self.ConfigVMException("Invalid assembly file.")
 			
 		if exceptionHandler and not os.path.isfile(exceptionHandler):
-			raise IOError("Invalid exception/trap file.")
+			raise self.ConfigVMException("Invalid exception/trap file.")
 		
 		self.__initialize()
 		
@@ -153,29 +158,57 @@ class VirtualMachine(object):
 	def __runDevices(self):
 		for device in self.devices_list:
 			device.tick()
+			
+	def __runInstruction(self, instruction):
+		if not hasattr(instruction, '__call__'):
+			raise self.RuntimeVMException("Attempted to execute non-instruction at 0x%08X\n" % self.regBank.PC)
+			
+		instruction(self.regBank)
 				
 	def __vm_loop(self):
 		while self.running:
-			try:
+			try:				
 				self.__runDevices()
 
+				did_delay_slot = False
 				oldPC = self.regBank.PC
 				instruction = self.memory.getInstruction(self.regBank.PC)
 				
-				if not instruction:
-					_debug("Attempted to execute non-instruction at 0x%08X\n" % self.regBank.PC)
-					break
+				# if the instruction does have a delay, and delay slots are enabled
+				# we need to handle it...
+				if hasattr(instruction, '_delay') and self.enableDelaySlot:
+					
+					# what we are doing is fetching the instruction AFTER the current
+					# one (the one which should go into the delay slot) and executing
+					# it first...
+					did_delay_slot = True
+					delay_slot = self.memory.getInstruction(self.regBank.PC + 0x4)
+					
+					if self.verboseSteps:
+						_debug('[DELAYED BR]\n' + buildLineOfCode(self.regBank.PC + 0x4, delay_slot))
+					
+					# if an exception is raised when executing the instruction
+					# in the delay slot, we handle it like it was caused in the jump,
+					# then the handler should set the PC to execute the delay slot again
+					# hence we increase the PC to skip the delay slot, and continue 
+					# the execution.
+					try: self.__runInstruction(delay_slot)
+					except MIPS_Exception as cur_exception:
+						self.processException(cur_exception)
+						self.regBank.PC += 0x4
+						continue
 					
 				if self.verboseSteps:
 					_debug(buildLineOfCode(self.regBank.PC, instruction))
 					
-				if self.regBank.PC in self.debugPoints:
+				if self.regBank.PC in self.debugPoints or self.doStep:
+					self.currentLine = buildLineOfCode(self.regBank.PC, instruction)
 					pdb.set_trace()
-				
-				instruction(self.regBank)
+					
+				self.__runInstruction(instruction)
 				
 				if oldPC == self.regBank.PC:
-					self.regBank.PC += 0x4
+					self.regBank.PC += 0x8 if did_delay_slot else 0x4
 			
 			except MIPS_Exception as cur_exception:
 				self.processException(cur_exception)
@@ -202,6 +235,8 @@ class VirtualMachine(object):
 		if not self.runAsKernel:
 			self.regBank.CP0.Status |= 0x2 # enter user mode
 			
+		self.regBank.CP0.Status |= 0xFF01 # enable all interrupt masks and the global interrupt switch
+			
 		self.regBank.CP0.Compare = 1500 # clock ticks until next interrupt
 		self.regBank[29] = 0x80000000 - 0xC # stack pointer -- set a tad lower to fake argc and argv
 		
@@ -220,7 +255,7 @@ class VirtualMachine(object):
 			
 		if self.verboseSteps:
 			_debug("[ EXCEPTION]    Raised MIPS exception '%s' (%s).\n" % (exception.code, exception.debug_msg))
-						
+		
 		code = self.EXCEPTIONS[exception.code]
 		
 		if code == 0: # interrupt raised
@@ -240,6 +275,13 @@ class VirtualMachine(object):
 		elif code == 8: # syscall, hook for 'exit' (10)
 			if self.regBank[2] == 10:
 				self.running = False
+			elif self.regBank[2] == 17: # exit2
+				self.running = False
+				
+				if self.regBank[4]:
+					pdb.set_trace()
+					raise self.RuntimeVMException("Program terminated with error code %d" % self.regBank[4])
+				
 			elif self.virtualSyscalls:
 				self.__syscallVirtualization()
 				self.regBank.PC += 0x4 # skip syscall instruction...
@@ -253,10 +295,11 @@ class VirtualMachine(object):
 		self.regBank.CP0.Cause &= ~0x3C
 		self.regBank.CP0.Cause |= (code << 2) # set exception code in the cause register
 		
-		self.regBank.CP0.Status &= ~0x1	# disable exceptions
-		self.regBank.CP0.EPC = self.regBank.PC	# save old PC
+		lowbits = self.regBank.CP0.Status & 0x3F # get the lowest 6 bits from Status
+		self.regBank.CP0.Status &= ~0x3F # ...and clear them on the register
+		self.regBank.CP0.Status |= (lowbits << 2) & 0x3F # load them back shifted, so two new zeros appear
 		
-		self.regBank.CP0.Status &= ~0x2	# enter kernel mode
+		self.regBank.CP0.EPC = self.regBank.PC	# save old PC
 		self.regBank.PC = EXCEPTION_HANDLER_ADDR # ...and jump to the exception handler
 		
 	def getAccessMode(self):
@@ -275,6 +318,7 @@ class VirtualMachine(object):
 		
 		# device initialization
 		self.devices_list = []
+		interrupt_handlers = []
 		device_kb = None
 		device_scr = None
 		
@@ -286,8 +330,19 @@ class VirtualMachine(object):
 	
 			device_instance = device(len(self.devices_list), **device_params)
 			
-			for memory_address in device_instance._memory_map():
+			if 	not hasattr(device_instance, 'tick') or \
+				not hasattr(device_instance, '__getitem__') or \
+				not hasattr(device_instance, '__setitem__'):
+				raise self.ConfigVMException("Device '%s' doesn't implement the standard Device Interface." % device_name)
+			
+			if 	not hasattr(device_instance, '_memory_map'):
+				raise self.ConfigVMException("Device '%s' doesn't have memory mappings." % device_name)
+			
+			for memory_address in device_instance._memory_map:
 				self.memory.devices_memory_map[memory_address] = device_instance
+				
+			if hasattr(device_instance, '_interrupt_handler') and hasattr(device_instance, '_interrupt_handler_label'):
+				interrupt_handlers.append((len(self.devices_list), device_instance._interrupt_handler, device_instance._interrupt_handler_label))
 			
 			self.devices_list.append(device_instance)
 			
@@ -304,11 +359,11 @@ class VirtualMachine(object):
 			self.parser.parseFile(self.exceptionHandler)
 		else:
 			if not self.virtualSyscalls:
-				keyboard_address = min(device_kb._memory_map())
-				screen_address = min(device_scr._memory_map())
-				ktext = getKernelText(True, True, screen_address, keyboard_address)
+				keyboard_address = min(device_kb._memory_map)
+				screen_address = min(device_scr._memory_map)
+				ktext = getKernelText(True, True, interrupt_handlers, screen_address, keyboard_address)
 			else:
-				ktext = getKernelText(True, False)
+				ktext = getKernelText(True, False, interrupt_handlers)
 				
 			self.parser.parseBuffer(ktext)
 		
@@ -343,3 +398,4 @@ class VirtualMachine(object):
 			
 		if regbank:
 			_debug(str(self.regBank))
+			

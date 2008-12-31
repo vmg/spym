@@ -26,6 +26,7 @@ import re, os
 from spym.vm.preprocessor import AssemblyPreprocessor
 from spym.vm.pseudoinstructions import PseudoInstructionAssembler
 from spym.vm.instructions import InstructionAssembler
+from spym.common.utils import _debug
 
 class AssemblyParser(object):
 	"""Core for the assembly parsing routines."""
@@ -90,7 +91,13 @@ class AssemblyParser(object):
 			
 				if identifier:
 					if identifier[0] == '.':
-						self.cur_address = self.preprocessor(identifier, args, self.cur_address)
+						old_line_start = self.cur_address
+						new_line_start, self.cur_address = self.preprocessor(identifier, args, self.cur_address)
+						
+						for (l, a) in self.local_labels.items():
+							if a == old_line_start:
+								self.local_labels[l] = new_line_start
+
 					else:
 						inst_code = self.instruction_assembler(identifier, args)
 						if not isinstance(inst_code, list):
@@ -104,6 +111,7 @@ class AssemblyParser(object):
 											
 							self.memory[self.cur_address] = inst
 							self.cur_address += 0x4
+					
 			except (self.ParserException, AssemblyPreprocessor.PreprocessorException, InstructionAssembler.InstructionAssemblerException) as exc:
 				raise self.ParsingFailed("\nLINE %d:\t%s\n  %s" % (line_no, line.strip(), exc))
 						
@@ -122,7 +130,7 @@ class AssemblyParser(object):
 	def resolveGlobalDependencies(self):
 		for (inst_address, instruction) in self.memory.getInstructionData():
 			if hasattr(instruction, '_inst_bld_tmp') and not self.instruction_assembler.resolveLabels(instruction, inst_address, self.global_labels):
-				raise self.ParserException("Cannot resolve label in instruction '%s'" % str(instruction))
+				raise self.ParserException("Cannot resolve label in instruction '%s' @ %08X" % (str(instruction._inst_bld_tmp), inst_address))
 		
 	def __parseLine(self, line):
 		line_label = None

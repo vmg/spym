@@ -862,10 +862,15 @@ class InstructionAssembler(object):
 			if b.CP0.getUserBit():
 				raise MIPS_Exception('RI')
 			
-			b.CP0.Status |= 0x2 # back into user mode!
-			b.PC = b.CP0.EPC	# ...and back were we left it...
+			lowbits = b.CP0.Status & 0x3F # get the lowest 6 bits
+			b.CP0.Status &= ~0x3F		  # clear the SIX lowest bits
+			
+			# shift them right, but put back only 4 lower bits (to bring 0s from the right) 
+			b.CP0.Status |= (lowbits >> 2) & 0xF
 			
 		self.encoder(_asm_rfe, 'rfe', s = 0x10)
+		setattr(_asm_rfe, '_delay', True)
+		
 		return _asm_rfe
 		
 	def ins_syscall(self, args):

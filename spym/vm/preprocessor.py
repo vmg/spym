@@ -23,6 +23,8 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 
+from spym.common.utils import _debug
+
 class AssemblyPreprocessor(object):
 	
 	class PreprocessorException(Exception):
@@ -33,6 +35,7 @@ class AssemblyPreprocessor(object):
 		self.memory = memory
 		
 		self.align = None
+		self.lastSegmentAddr = {}
 		
 	def __call__(self, identifier, args, cur_address):
 		func = 'dir_' + identifier[1:]
@@ -40,7 +43,7 @@ class AssemblyPreprocessor(object):
 		if not hasattr(self, func):
 			raise self.PreprocessorException("Unknown preprocessor directive: %s" % func)
 		
-		return getattr(self, func)(args, cur_address) or cur_address
+		return getattr(self, func)(args, cur_address) or (cur_address, cur_address)
 		
 	def __checkArgs(self, args, _min = None, _max = None, _count = None):
 		argcount = len(args)
@@ -55,22 +58,25 @@ class AssemblyPreprocessor(object):
 		self.align = None
 		
 		if not args:
-			return self.memory.getNextFreeBlock(self.memory.SEGMENT_DATA[segment][0])
-			
-		try:
-			address = int(args[0], 16)
-		except ValueError:
-			raise self.PreprocessorException("Invalid address: '%s'" % args[0])
+			block_start = self.lastSegmentAddr[segment] if segment in self.lastSegmentAddr else self.memory.SEGMENT_DATA[segment][0]
+			address = self.memory.getNextFreeBlock(block_start)
+		else:	
+			try:
+				address = int(args[0], 16)
+			except ValueError:
+				raise self.PreprocessorException("Invalid address: '%s'" % args[0])
 		
-		if self.memory.getSegment(address) != segment:
-			raise self.PreprocessorException("Address %X doesn't belong to the %s segment." % (address, segment))
+			if self.memory.getSegment(address) != segment:
+				raise self.PreprocessorException("Address %X doesn't belong to the %s segment." % (address, segment))
 		
-		return address
+		self.lastSegmentAddr[segment] = address
+		return (address, address)
 		
 	def __assembleString(self, string, address, nullterm):
 		if not string[0] == '"' or not string[-1] == '"':
 			raise self.PreprocessorException("Malformed string constant.")
 			
+		original_address = address
 		string = string[1:-1].replace(r'\n', '\n').replace(r'\"', '"').replace(r'\t', '\t')
 		
 		for c in string:
@@ -81,13 +87,16 @@ class AssemblyPreprocessor(object):
 			self.memory[address, 1] = 0x0
 			address += 1
 			
-		return address
+		return (original_address, address)
 		
-	def __assembleData(self, data, size, address):
+	def __assembleData(self, data, size, address):		
 		if self.align is None:
-			address += address % size
+			mod = address % size
 		else:
-			address += address % (2 ** self.align)
+			mod = address % (2 ** self.align)
+			
+		address += (4 - mod) if mod else 0
+		original_address = address
 
 		try:
 			for d in data:
@@ -105,7 +114,7 @@ class AssemblyPreprocessor(object):
 		except ValueError:
 			raise self.PreprocessorException("Invalid integer constants for data assembly: '%s'" % d)
 			
-		return address
+		return (original_address, address)
 		
 	def dir_set(self, args, cur_address):
 		self.__checkArgs(args, _count = 1)
