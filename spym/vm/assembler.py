@@ -40,9 +40,9 @@ class AssemblyParser(object):
 		pass
 	
 	def __init__(self, vm_memory, enablePseudoInsts = True):
-		self.memory = vm_memory
+		self.memory = vm_memory.main_memory
 	
-		self.preprocessor = AssemblyPreprocessor(self, vm_memory)
+		self.preprocessor = AssemblyPreprocessor(self, self.memory)
 		
 		if enablePseudoInsts:
 			self.instruction_assembler = PseudoInstructionAssembler(self)
@@ -109,7 +109,7 @@ class AssemblyParser(object):
 							if hasattr(inst, '_inst_bld_tmp'):
 								local_instructions.append(self.cur_address)
 											
-							self.memory[self.cur_address] = inst
+							self.memory[self.cur_address, 4] = inst
 							self.cur_address += 0x4
 					
 			except (self.ParserException, AssemblyPreprocessor.PreprocessorException, InstructionAssembler.InstructionAssemblerException) as exc:
@@ -118,7 +118,7 @@ class AssemblyParser(object):
 		self.parsedFiles += 1
 		
 		for inst_address in local_instructions:
-			self.memory[inst_address] = self.instruction_assembler.resolveLabels(self.memory[inst_address], inst_address, self.local_labels)
+			self.memory[inst_address, 4] = self.instruction_assembler.resolveLabels(self.memory[inst_address, 4], inst_address, self.local_labels)
 		
 		for (label, address) in self.global_labels.items():
 			if address is None:
@@ -135,7 +135,7 @@ class AssemblyParser(object):
 				if hasattr(new_instruction, '_inst_bld_tmp'):
 					raise self.ParserException("Cannot resolve label in instruction '%s' @ %08X" % (str(instruction._inst_bld_tmp), inst_address))
 					
-				self.memory[inst_address] = new_instruction
+				self.memory[inst_address, 4] = new_instruction
 		
 	def __parseLine(self, line):
 		line_label = None

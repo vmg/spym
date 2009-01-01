@@ -308,7 +308,20 @@ class VirtualMachine(object):
 	def __initialize(self):
 		# core elements
 		from spym.vm.memory import MemoryManager
-		self.memory = MemoryManager(self, self.memoryBlockSize)
+		
+		cache_data = (
+			{	# LEVEL 1 Data Cache	
+				'cacheMapping' : 'direct',
+				'numberOfLines' : 8#1024, # 1024 lines = 32KB of data
+			},
+			{	# LEVEL 1 Code Cache	
+				'cacheMapping' : 'direct',
+				'numberOfLines' : 8#2048,	# 2048 lines = 64KB of code
+			},
+		)
+		
+		
+		self.memory = MemoryManager(self, cache_data)
 		
 		from spym.vm.assembler import AssemblyParser
 		self.parser = AssemblyParser(self.memory, self.enablePseudoInsts)

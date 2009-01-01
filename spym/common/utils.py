@@ -82,16 +82,17 @@ def _debug(msg):
 
 def buildLineOfCode(address, instruction):
 	RIGHT_MARGIN = 55
+	if not hasattr(instruction, '_vm_asm'):
+		return ''
+		
 	output = "[0x%08X]    0x%08X  %s" % (address, instruction, instruction.text)
 	output = output.ljust(RIGHT_MARGIN) + "; "
+	text, comment = instruction.orig_text, ""
 	
-	if hasattr(instruction, 'orig_text'):
-		text, comment = instruction.orig_text, ""
-		
-		if '#' in instruction.orig_text:
-			text, comment = text.split('#', 1)
-			comment = ' # ' + comment.strip()
+	if '#' in instruction.orig_text:
+		text, comment = text.split('#', 1)
+		comment = ' # ' + comment.strip()
 
-		output += text.strip().ljust(30) + comment
+	output += text.strip().ljust(30) + comment
 	
 	return output + '\n'

@@ -23,9 +23,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 import sys, random
-#from spym.common.utils import *
-def _debug(string):
-	sys.stdout.write(string)
+from spym.common.utils import _debug
 	
 class CacheLine(object):
 	def __init__(self, cache_ptr, replacementPolicy):
@@ -55,7 +53,7 @@ class CacheLine(object):
 		self.dirty = 0
 		self.valid = 1
 		self.label = self.cache.getLabel(start_addr)
-		for i in range(len(self.contents)): self.contents[i] = self.memory[start_addr + i * 0x4]
+		for i in range(len(self.contents)): self.contents[i] = self.memory[start_addr + i * 0x4, 4]
 		if self.policy is 'FIFO': self.setCounters()
 		
 	def getContents(self):
@@ -67,12 +65,12 @@ class CacheLine(object):
 		
 	def writeBack(self):
 		for (offset, word) in enumerate(self.contents):
-			self.memory[self.start_addr + offset * 0x4] = word
+			self.memory[self.start_addr + offset * 0x4, 4] = word
 		
 	def writeContents(self, word_in_block, subword_offset, size, data):			
 		word = self.contents[word_in_block]
 		word = word & ~(BaseCache.SIZE_MASKS[size] << (subword_offset * 8))
-		word = word | ((data & self.SIZE_MASKS[size]) << (subword_offset * 8))
+		word = word | ((data & BaseCache.SIZE_MASKS[size]) << (subword_offset * 8))
 		
 		if self.policy is 'LRU': self.setCounters()
 		self.contents[word_in_block] = word
@@ -81,7 +79,7 @@ class CacheLine(object):
 	
 class BaseCache(object):
 	SIZE_MASKS = [None, 0xFF, 0xFFFF, None, 0xFFFFFFFF]
-	def __init__(self, memory_ptr, blockSize, waySize, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy):
+	def __init__(self, cache_name, memory_ptr, blockSize, waySize, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy):
 		"""
 		Base cache constructor.
 		
@@ -111,6 +109,7 @@ class BaseCache(object):
 			To use a 'fully associative' map, set the number of lines and the number of ways to the same value.
 			
 		"""
+		self.cache_name = cache_name
 		self.memory = memory_ptr
 		self.linecount = numberOfLines
 		self.total_sets = numberOfLines // waySize
@@ -252,10 +251,10 @@ class BaseCache(object):
 		"""
 		dest_line = self.findLineForAddress(address)
 		if dest_line is None:
-			_debug("[LVL1 CACHE]    Read miss at 0x%08X... accessing memory.\n" % address)
+			_debug("[%s]    Read miss at 0x%08X... accessing memory.\n" % (self.cache_name, address))
 			data = self.bringFromMemory(address)
 		else:
-			_debug("[LVL1 CACHE]    Read hit at 0x%08X (line %d).\n" % (address, dest_line))
+			_debug("[%s]    Read hit at 0x%08X (line %d).\n" % (self.cache_name, address, dest_line))
 			data = self.cache[dest_line].getContents()
 
 		return self.buildDataReturn(data, address, size)
@@ -268,7 +267,7 @@ class BaseCache(object):
 		word_in_block = (address % self.blocksize) // 4
 		
 		if dest_line is None:
-			_debug("[LVL1 CACHE]    Write miss at 0x%08X... resolving.\n" % address)
+			_debug("[%s]    Write miss at 0x%08X... resolving.\n" % (self.cache_name, address))
 			
 			# resolve writing miss with or without allocation
 			if self.writePolicy_miss is 'write-allocate':
@@ -280,7 +279,7 @@ class BaseCache(object):
 				self.memory[address, size] = data
 				
 		else:
-			_debug("[LVL1 CACHE]    Wrote hit at 0x%08X (line %d).\n" % (address, dest_line))
+			_debug("[%s]    Write hit at 0x%08X (line %d).\n" % (self.cache_name, address, dest_line))
 			
 			# always write on cache
 			self.cache[dest_line].writeContents(word_in_block, address % 4, size, data)
@@ -289,39 +288,29 @@ class BaseCache(object):
 			if self.writePolicy_hit is 'write-through':
 				self.memory[address, size] = data
 		
-	def __getitem__(self, address):		
-		if isinstance(address, tuple):
-			address, size = address
-		elif address % 4 == 0: 	size = 4
-		elif address % 2 == 0:	size = 2
-		else:					size = 1
-
+	def __getitem__(self, address_tuple):		
+		address, size = address_tuple
 		return self.getData(address, size)
 
-	def __setitem__(self, address, data):		
-		if isinstance(address, tuple):
-			address, size = address
-		elif address % 4 == 0: 	size = 4
-		elif address % 2 == 0:	size = 2
-		else:					size = 1
-
-		return self.setData(address, size, data)
+	def __setitem__(self, address_tuple, data):		
+		address, size = address_tuple
+		self.setData(address, size, data)
 		
 class MIPSCache_Direct(BaseCache):
 	def __init__(self, memory_ptr, numberOfLines, writePolicy_hit = 'write-back', writePolicy_miss = 'write-allocate', replacementPolicy = 'FIFO'):
-		BaseCache.__init__(self, memory_ptr, 16, 1, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
+		BaseCache.__init__(self, 'CACHE', memory_ptr, 16, 1, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
 
 class MIPSCache_MultiWay(BaseCache):
 	def __init__(self, memory_ptr, numberOfLines, sizeOfWay = 4, writePolicy_hit = 'write-back', writePolicy_miss = 'write-allocate', replacementPolicy = 'FIFO'):
-		BaseCache.__init__(self, memory_ptr, 16, sizeOfWay, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
+		BaseCache.__init__(self, 'CACHE', memory_ptr, 16, sizeOfWay, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
 
 class MIPSCache_Associative(BaseCache):
 	def __init__(self, memory_ptr, numberOfLines, writePolicy_hit = 'write-back', writePolicy_miss = 'write-allocate', replacementPolicy = 'FIFO'):
-		BaseCache.__init__(self, memory_ptr, 16, numberOfLines, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
+		BaseCache.__init__(self, 'CACHE', memory_ptr, 16, numberOfLines, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
 		
 		
 class MIPSCache_TEMPLATE(BaseCache):
-	def __init__(self, memory_ptr, cacheMapping, numberOfLines, 
+	def __init__(self, cacheName, memory_ptr, cacheMapping, numberOfLines, 
 				sizeOfWay = None, 
 				writePolicy_hit = 'write-back', 
 				writePolicy_miss = 'write-allocate', 
@@ -332,7 +321,7 @@ class MIPSCache_TEMPLATE(BaseCache):
 		elif cacheMapping is 'associative':
 			sizeOfWay = numberOfLines
 			
-		BaseCache.__init__(self, memory_ptr, 16, numberOfLines, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
+		BaseCache.__init__(self, cacheName, memory_ptr, 16, numberOfLines, numberOfLines, writePolicy_hit, writePolicy_miss, replacementPolicy)
 
 	
 class TestMemory(object):

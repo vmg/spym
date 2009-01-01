@@ -26,43 +26,102 @@ from spym.common.utils import buildLineOfCode
 from spym.vm.exceptions import MIPS_Exception
 from spym.vm.devices.cache import MIPSCache_TEMPLATE
 
-# class MemoryManager(object):
-# 	def __init__(self, vm_ptr, L1_data_cache = {}, L1_code_cache = {}, L2_data_cache = {}, L2_code_cache = {}):
-# 		self.main_memory = MainMemory(vm_ptr, 32) # default block size, 8 words
-# 		
-# 		if L1_code_cache and L1_data_cache:
-# 			self.__initCache_Dual(1, L1_data_cache, L1_code_cache)
-# 			
-# 		elif L1_code_cache or L1_data_cache:
-# 			self.__initCache_Unified(1, L1_data_cache or L1_code_cache)
-# 			
-# 			if L2_code_cache and L2_code_cache:
-# 				self.__initCache_Dual(2, L2_data_cache, L2_code_cache)
-# 			else:
-# 				self.__initCache_Unified(2, L2_data_cache or L2_code_cache)
-# 		
-# 		
-# 	def __initCache_Unified(self, level, cache_data):
-# 		if not cache: return
-# 		cache_instance = MIPSCache_TEMPLATE(self, **cache_data)
-# 		
-# 						
-# 	def __initCache_Dual(self, level, data_cache, code_cache):
-# 		
-# 	def getInstruction(self, address):
-# 		
-# 	
-# 	def __getitem__(self, address):
-# 		if isinstance(address, tuple):
-# 			address, size = address
-# 			
-# 		if 'text' in self.main_memory.getSegment(address):
-			
+class MemoryManager(object):	
+	USER_READ_SPACE 	= (0x00400000, 0x7FFFFFFF)
+	USER_WRITE_SPACE 	= (0x10000000, 0x7FFFFFFF)
+	MIN_ADDRESS =		0x00000000
+	MAX_ADDRESS =		0xFFFFFFFF
+	
+	def __init__(self, vm_ptr, L1_cache_CFG = {}, L2_cache_CFG = {}):
+		self.vm = vm_ptr
+		self.main_memory = MainMemory(vm_ptr, 32) # default block size, 8 words
+		self.devices_memory_map = {}
 		
-			
+		L1_data_cache = None
+		L1_code_cache = None
+		L2_data_cache = None
+		L2_code_cache = None
 		
+		if isinstance(L1_cache_CFG, tuple):	L1_data_CFG, L1_code_CFG = L1_cache_CFG
+		else:								L1_data_CFG, L1_code_CFG = L1_cache_CFG, None
+		
+		if isinstance(L2_cache_CFG, tuple):	L2_data_CFG, L2_code_CFG = L2_cache_CFG
+		else:								L2_data_CFG, L2_code_CFG = L2_cache_CFG, None
+			
+		if L2_data_CFG:
+			L2_data_cache = MIPSCache_TEMPLATE('LVL2 CACHE', self.main_memory, **L2_data_CFG)
+		
+		if L2_code_CFG:
+			L2_code_cache = MIPSCache_TEMPLATE('LVL2 CACHE', self.main_memory, **L2_code_CFG)
+			
+		L2_code_cache = L2_code_cache or L2_data_cache
+		L2_data_cache = L2_data_cache or L2_code_cache
+		
+		if (L2_code_cache or L2_data_cache) and not (L1_code_CFG or L1_data_CFG):
+			raise Exception("Cannot instantiate Level 2 caches if Level 1 are not present.")
+			
+		if L1_data_CFG:
+			L1_data_cache = MIPSCache_TEMPLATE('DATA CACHE', L2_data_cache or self.main_memory, **L1_data_CFG)
+			
+		if L1_code_CFG:
+			L1_code_cache = MIPSCache_TEMPLATE('CODE CACHE', L2_code_cache or self.main_memory, **L1_code_CFG)
+			
+		self.data_access = L1_data_cache or L1_code_cache or self.main_memory
+		self.code_access = L1_code_cache or L1_data_cache or self.main_memory
+	
+	def __getitem__(self, address):
+		if isinstance(address, tuple):
+			address, size = address
+		elif address % 4 == 0: 	size = 4
+		elif address % 2 == 0:	size = 2
+		else:					size = 1
+		
+		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
+			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Invalid address %08X (%d)' % (address, size))
+		
+		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
+			raise MIPS_Exception('RI', badaddr = address)
+			
+		if address & ~0x3 in self.devices_memory_map:
+			device = self.devices_memory_map[address]
+			return device[address, size]	
+			
+		segment = self.main_memory.getSegment(address)
+		if 'text' in segment:
+			return self.code_access[address, size]
+		
+		if 'data' in segment:
+			return self.data_access[address, size]
+			
+		return 0x0
+		
+	def __setitem__(self, address, value):
+		if isinstance(address, tuple):
+			address, size = address
+		elif address % 4 == 0: 	size = 4
+		elif address % 2 == 0:	size = 2
+		else:					size = 1
+		
+		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
+			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Invalid address %08X (%d)' % (address, size))
+		
+		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
+			raise MIPS_Exception('RI', badaddr = address, debug_msg = 'Attempted to write in protected space.') # FIXME: is this the right exception?
+		
+		if address & ~0x3 in self.devices_memory_map:
+			device = self.devices_memory_map[address]
+			device[address, size] = value
+			return
 
-class MemoryManager(object):
+		segment = self.main_memory.getSegment(address)
+		if 'text' in segment:
+			self.code_access[address, size] = value
+
+		if 'data' in segment:
+			self.data_access[address, size] = value
+			
+
+class MainMemory(object):
 	SEGMENT_DATA = {
 		'krnel_data_bottom':(0x00000000, 0x00400000 - 1),
 		'user_text' : 		(0x00400000, 0x10000000 - 1),
@@ -71,18 +130,6 @@ class MemoryManager(object):
 		'kernel_data' : 	(0x90000000, 0xFFFFFFFF),
 	}
 	
-	USER_READ_SPACE 	= (0x00400000, 0x7FFFFFFF)
-	USER_WRITE_SPACE 	= (0x10000000, 0x7FFFFFFF)
-		
-	MIN_ADDRESS =		0x00000000
-	MAX_ADDRESS =		0xFFFFFFFF
-	
-	SIZE_DICT = {
-		'word' : 4,
-		'half' : 2,
-		'byte' : 1
-	}
-
 	class MemoryBlock(object):
 		SIZE_MASKS = [None, 0xFF, 0xFFFF, None, 0xFFFFFFFF]
 		
@@ -114,7 +161,6 @@ class MemoryManager(object):
 		self.BLOCK_SIZE = blockSize
 		self.vm = vm
 		self.memory = {}
-		self.devices_memory_map = {}
 		
 	def __allocate(self, address):
 		self.memory[address // self.BLOCK_SIZE] = self.MemoryBlock(self.BLOCK_SIZE)
@@ -123,34 +169,13 @@ class MemoryManager(object):
 		return (address // self.BLOCK_SIZE) in self.memory
 		
 	def __getData(self, address, size):
-		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-			raise MIPS_Exception('ADDRL', badaddr = address)
-			
-		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
-			raise MIPS_Exception('ADDRL', badaddr = address) # FIXME: is this the right exception?
-			
-		if address & ~0x3 in self.devices_memory_map:
-			device = self.devices_memory_map[address]
-			return device[address, size]
-		
 		if not self.__contains__(address):
 			return 0x0
 		
 		return self.memory[address // self.BLOCK_SIZE].getData(size, address % self.BLOCK_SIZE)
 		
 		
-	def __setData(self, address, size, data):
-		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Invalid address %08X (%d)' % (address, size))
-			
-		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
-			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Attempted to write in protected space.') # FIXME: is this the right exception?
-			
-		if address & ~0x3 in self.devices_memory_map:
-			device = self.devices_memory_map[address]
-			device[address, size] = data
-			return
-		
+	def __setData(self, address, size, data):		
 		if not self.__contains__(address):
 			self.__allocate(address)
 			
@@ -183,7 +208,7 @@ class MemoryManager(object):
 		for (seg_name, seg_bounds) in self.SEGMENT_DATA.items():
 			if seg_bounds[0] <= address <= seg_bounds[1]:
 				return seg_name
-		
+
 		return None
 		
 	def getNextFreeBlock(self, address):		
@@ -205,23 +230,13 @@ class MemoryManager(object):
 		del(self.memory)
 		self.memory = {}
 	
-	def __getitem__(self, address):		
-		if isinstance(address, tuple):
-			address, size = address
-		elif address % 4 == 0: 	size = 4
-		elif address % 2 == 0:	size = 2
-		else:					size = 1
-		
+	def __getitem__(self, address_tuple):
+		address, size = address_tuple
 		return self.__getData(address, size)
 		
-	def __setitem__(self, address, data):		
-		if isinstance(address, tuple):
-			address, size = address
-		elif address % 4 == 0: 	size = 4
-		elif address % 2 == 0:	size = 2
-		else:					size = 1
-			
-		return self.__setData(address, size, data)
+	def __setitem__(self, address_tuple, data):
+		address, size = address_tuple
+		self.__setData(address, size, data)
 		
 	def __str_Segments(self, segments):
 		segments.sort()
