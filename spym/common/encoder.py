@@ -25,6 +25,14 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 from spym.common.utils import *
 
+# ugly monkeypatching.
+class MemoryInstruction(long):
+	def __init__(self, number):
+		self._vm_asm = None
+		self.text = ''
+		self.orig_text = ''
+		self._delay = False
+
 class InstructionEncoder(object):	
 	class EncodingError(Exception):
 		pass
@@ -69,15 +77,25 @@ class InstructionEncoder(object):
 		syntax = syntax.replace('shift', r'%(a)d')
 		return ins_name.lower() + " " + syntax % {'s' : s, 't' : t, 'd' : d, 'a' : a, 'imm' : imm, 'label' : label}
 		
+	def tmpEncoding(self, ins_closure, data_tuple):
+		mem_inst = MemoryInstruction(0xDEAD)
+		mem_inst._vm_asm = ins_closure
+		setattr(mem_inst, '_inst_bld_tmp', data_tuple)
+		return mem_inst	
 		
-	def __call__(self, ins_closure, ins_name, s = 0, t = 0, d = 0, shift = 0, imm = 0, label = ""):
+	def __call__(self, ins_closure, ins_name, s = 0, t = 0, d = 0, shift = 0, imm = 0, label = "", do_delay = False, label_address = 0x0):
 		encoding, _, opcode, funcode, syntax = self.builder.asm_metadata['ins_' + ins_name]
 		
 		binary_encoding = self.encodeBinary(encoding, opcode, funcode, s, t, d, shift, imm)
 		text_encoding = self.encodeText(ins_name, encoding, syntax, s, t, d, shift, imm, label)
+
+		mem_inst = MemoryInstruction(binary_encoding)
+		mem_inst._vm_asm = ins_closure
+		mem_inst.text = text_encoding
+		mem_inst._delay = do_delay
 		
-		setattr(ins_closure, 'mem_content', binary_encoding)
-		setattr(ins_closure, 'text', text_encoding)
+		setattr(mem_inst._vm_asm, 'label_address', label_address)
+		return mem_inst
 			
 		
 		

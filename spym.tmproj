@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>currentDocument</key>
-	<string>spym/vm/exceptions.py</string>
+	<string>spym/vm/devices/cache.py</string>
 	<key>documents</key>
 	<array>
 		<dict>
@@ -21,174 +21,86 @@
 	<integer>200</integer>
 	<key>metaData</key>
 	<dict>
-		<key>spym/common/utils.py</key>
+		<key>spym/vm/devices/cache.py</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>17</integer>
+				<integer>15</integer>
 				<key>line</key>
-				<integer>83</integer>
+				<integer>202</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>28</integer>
-		</dict>
-		<key>spym/vm/assembler.py</key>
-		<dict>
-			<key>caret</key>
-			<dict>
-				<key>column</key>
-				<integer>113</integer>
-				<key>line</key>
-				<integer>125</integer>
-			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>52</integer>
-		</dict>
-		<key>spym/vm/core.py</key>
-		<dict>
-			<key>caret</key>
-			<dict>
-				<key>column</key>
-				<integer>0</integer>
-				<key>line</key>
-				<integer>209</integer>
-			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>171</integer>
-		</dict>
-		<key>spym/vm/devices/__init__.py</key>
-		<dict>
-			<key>caret</key>
-			<dict>
-				<key>column</key>
-				<integer>42</integer>
-				<key>line</key>
-				<integer>1</integer>
-			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>0</integer>
+			<integer>153</integer>
 		</dict>
 		<key>spym/vm/devices/clock.py</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>22</integer>
+				<integer>0</integer>
 				<key>line</key>
-				<integer>61</integer>
+				<integer>24</integer>
 			</dict>
+			<key>columnSelection</key>
+			<false/>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>22</integer>
-		</dict>
-		<key>spym/vm/devices/terminal.py</key>
-		<dict>
-			<key>caret</key>
+			<integer>0</integer>
+			<key>selectFrom</key>
 			<dict>
 				<key>column</key>
 				<integer>0</integer>
 				<key>line</key>
-				<integer>129</integer>
+				<integer>0</integer>
 			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>104</integer>
-		</dict>
-		<key>spym/vm/exceptions.py</key>
-		<dict>
-			<key>caret</key>
+			<key>selectTo</key>
 			<dict>
 				<key>column</key>
 				<integer>0</integer>
 				<key>line</key>
-				<integer>283</integer>
+				<integer>24</integer>
 			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>281</integer>
 		</dict>
-		<key>spym/vm/instructions.py</key>
+		<key>spym/vm/memory.py</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>0</integer>
+				<integer>65</integer>
 				<key>line</key>
-				<integer>860</integer>
+				<integer>57</integer>
 			</dict>
+			<key>columnSelection</key>
+			<false/>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>834</integer>
-		</dict>
-		<key>spym/vm/preprocessor.py</key>
-		<dict>
-			<key>caret</key>
+			<integer>30</integer>
+			<key>selectFrom</key>
 			<dict>
 				<key>column</key>
-				<integer>105</integer>
+				<integer>3</integer>
 				<key>line</key>
-				<integer>67</integer>
+				<integer>57</integer>
 			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>33</integer>
-		</dict>
-		<key>spym/vm/regbank.py</key>
-		<dict>
-			<key>caret</key>
+			<key>selectTo</key>
 			<dict>
 				<key>column</key>
-				<integer>23</integer>
+				<integer>65</integer>
 				<key>line</key>
-				<integer>114</integer>
+				<integer>57</integer>
 			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>32</integer>
-		</dict>
-		<key>tests/VMTest.py</key>
-		<dict>
-			<key>caret</key>
-			<dict>
-				<key>column</key>
-				<integer>22</integer>
-				<key>line</key>
-				<integer>38</integer>
-			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>27</integer>
 		</dict>
 	</dict>
 	<key>openDocuments</key>
 	<array>
-		<string>tests/VMTest.py</string>
-		<string>spym/common/utils.py</string>
-		<string>spym/vm/core.py</string>
-		<string>spym/vm/assembler.py</string>
-		<string>spym/vm/exceptions.py</string>
-		<string>spym/vm/preprocessor.py</string>
-		<string>spym/vm/regbank.py</string>
-		<string>spym/vm/instructions.py</string>
-		<string>spym/vm/devices/__init__.py</string>
 		<string>spym/vm/devices/clock.py</string>
-		<string>spym/vm/devices/terminal.py</string>
+		<string>spym/vm/devices/cache.py</string>
+		<string>spym/vm/memory.py</string>
 	</array>
 	<key>showFileHierarchyDrawer</key>
 	<false/>

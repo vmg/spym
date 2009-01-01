@@ -82,7 +82,7 @@ def _debug(msg):
 
 def buildLineOfCode(address, instruction):
 	RIGHT_MARGIN = 55
-	output = "[0x%08X]    0x%08X  %s" % (address, instruction.mem_content, instruction.text)
+	output = "[0x%08X]    0x%08X  %s" % (address, instruction, instruction.text)
 	output = output.ljust(RIGHT_MARGIN) + "; "
 	
 	if hasattr(instruction, 'orig_text'):

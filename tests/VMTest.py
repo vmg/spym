@@ -32,8 +32,8 @@ from spym.vm.devices import TerminalKeyboard, TerminalScreen
 class GlobalASMTests(unittest.TestCase):
 	def _runTest(self, asm, lab = True):
 		vm = VirtualMachine(asm, 
-			defaultMemoryMappedIO = True, 
-			virtualSyscalls = False, 
+			defaultMemoryMappedIO = False, 
+			virtualSyscalls = True, 
 			loadAsBuffer = lab, 
 			enablePseudoInsts = True, 
 			verboseSteps = False, 

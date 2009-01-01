@@ -190,31 +190,34 @@ class InstructionAssembler(object):
 			
 		return getattr(self, func)(args)
 		
-	def resolveLabels(self, func, func_addr, labels):
-		data = func._inst_bld_tmp
+	def resolveLabels(self, instruction, func_addr, labels):
+		data = instruction._inst_bld_tmp
 		
 		func_name = data[1]
 		label = data[2]
 		
 		if label not in labels:
-			return False
+			return instruction
 		
-		func.label_address = labels[label]
+		label_address = labels[label]
+		new_instruction = None
 		
 		if data[0] == 'jump':
-			self.encoder(func, func_name, 
-				imm = u32(func.label_address >> 2), 
-				label = label)
+			new_instruction = self.encoder(instruction._vm_asm, func_name, 
+				imm = u32(label_address >> 2), 
+				label = label,
+				label_address = label_address)
 
 		elif data[0] == 'branch':
-			self.encoder(func, func_name, 
+			new_instruction = self.encoder(instruction._vm_asm, func_name, 
 				s = data[3], 
 				t = data[4], 
-				imm = u32((func.label_address - func_addr + self.BRANCH_ENCODING_MOD) >> 2), 
-				label = label)
+				imm = u32((label_address - func_addr + self.BRANCH_ENCODING_MOD) >> 2), 
+				label = label,
+				label_address = label_address)
 		
-		delattr(func, '_inst_bld_tmp')
-		return True
+		del instruction
+		return new_instruction
 
 ############################################################
 ###### Templates
@@ -226,14 +229,9 @@ class InstructionAssembler(object):
 		
 		def _asm_arith(b): 
 			result = _lambda_f(b[reg_s], b[reg_t])
-			
-#			if overflow and result & (1 << 32):
-#				raise MIPS_Exception('OVF')
-				
 			b[reg_d] = result
 			
-		self.encoder(_asm_arith, func_name, d = reg_d, s = reg_s, t = reg_t)
-		return _asm_arith
+		return self.encoder(_asm_arith, func_name, d = reg_d, s = reg_s, t = reg_t)
 		
 	def shift_TEMPLATE(self, func_name, args, shift_imm, _lambda_f):
 		reg_d = self._parseRegister(args[0])
@@ -251,8 +249,7 @@ class InstructionAssembler(object):
 			def _asm_shift(b):
 				b[reg_d] = _lambda_f(b[reg_t], b[reg_s])
 		
-		self.encoder(_asm_shift, func_name, d = reg_d, t = reg_t, s = reg_s, shift = shift)
-		return _asm_shift
+		return self.encoder(_asm_shift, func_name, d = reg_d, t = reg_t, s = reg_s, shift = shift)
 		
 		
 	def imm_TEMPLATE(self, func_name, args, _lambda_f):			
@@ -263,8 +260,7 @@ class InstructionAssembler(object):
 		def _asm_imm(b):
 			b[reg_t] = _lambda_f(b[reg_s], immediate)
 			
-		self.encoder(_asm_imm, func_name, s = reg_s, t = reg_t, imm = immediate)
-		return _asm_imm
+		return self.encoder(_asm_imm, func_name, s = reg_s, t = reg_t, imm = immediate)
 		
 	def branch_TEMPLATE(self, func_name, label, s, t, _lambda_f, link = False):
 		reg_s = self._parseRegister(s)
@@ -274,11 +270,9 @@ class InstructionAssembler(object):
 			if _lambda_f(s32(b[reg_s]), s32(b[reg_t])):
 				if link: b[31] = b.PC + self.JAL_OFFSET
 				b.PC = _asm_branch.label_address
-			
-		setattr(_asm_branch, 'label_address', None)
-		setattr(_asm_branch, '_inst_bld_tmp', ('branch', func_name, label, reg_s, reg_t))
-		return _asm_branch
-		
+	
+		return self.encoder.tmpEncoding(_asm_branch, ('branch', func_name, label, reg_s, reg_t))
+
 	def storeload_TEMPLATE(self, func_name, args, size, unsigned = False):		
 		imm, reg_s = self._parseAddress(args[1])
 		reg_t = self._parseRegister(args[0])
@@ -292,8 +286,7 @@ class InstructionAssembler(object):
 			def _asm_storeload(b):
 				b.memory[(imm + u32(b[reg_s])), size] = b[reg_t]
 				
-		self.encoder(_asm_storeload, func_name, t = reg_t, s = reg_s, imm = imm)
-		return _asm_storeload
+		return self.encoder(_asm_storeload, func_name, t = reg_t, s = reg_s, imm = imm)
 		
 ############################################################
 ###### Integer arithmetic
@@ -348,10 +341,8 @@ class InstructionAssembler(object):
 				b.LO, b.HI = divmod(sign(b[reg_s]), sign(b[reg_t]))
 			except ZeroDivisionError:
 				raise MIPS_Exception('OVF')
-			
-		self.encoder(_asm_div, div_name, t = reg_t, s = reg_s)
 
-		return _asm_div
+		return self.encoder(_asm_div, div_name, t = reg_t, s = reg_s)
 	
 	def ins_divu(self, args):
 		"""
@@ -377,10 +368,8 @@ class InstructionAssembler(object):
 			result = sign(b[reg_s]) * sign(b[reg_t])
 			b.HI = (result >> 32) & 0xFFFFFFFF
 			b.LO = result & 0xFFFFFFFF
-			
-		self.encoder(_asm_mult, mult_name, s = reg_s, t = reg_t)
 				
-		return _asm_mult
+		return self.encoder(_asm_mult, mult_name, s = reg_s, t = reg_t)
 		
 	def ins_multu(self, args):
 		"""
@@ -628,9 +617,7 @@ class InstructionAssembler(object):
 		def _asm_lui(b):
 			b[reg_t] = (immediate << 16)
 			
-		self.encoder(_asm_lui, 'lui', t = reg_t, imm = immediate)
-			
-		return _asm_lui
+		return self.encoder(_asm_lui, 'lui', t = reg_t, imm = immediate)
 		
 	def ins_lb(self, args):
 		"""
@@ -704,10 +691,8 @@ class InstructionAssembler(object):
 		def _asm_j(b):
 			if link: b[31] = b.PC + self.JAL_OFFSET
 			b.PC = _asm_j.label_address
-		
-		setattr(_asm_j, 'label_address', None)
-		setattr(_asm_j, '_inst_bld_tmp', ('jump', jmp_name, label))
-		return _asm_j
+
+		return self.encoder.tmpEncoding(_asm_j, ('jump', jmp_name, label))
 		
 	def ins_jr(self, args, link = False):
 		"""
@@ -723,8 +708,7 @@ class InstructionAssembler(object):
 			if link: b[31] = b.PC + self.JAL_OFFSET
 			b.PC = b[reg_s]
 		
-		self.encoder(_asm_jr, jr_name, s = reg_s)
-		return _asm_jr
+		return self.encoder(_asm_jr, jr_name, s = reg_s)
 		
 	def ins_jal(self, args):
 		"""
@@ -755,8 +739,7 @@ class InstructionAssembler(object):
 		def _asm_mflo(b):
 			b[reg_d] = b.LO
 		
-		self.encoder(_asm_mflo, 'mflo', d = reg_d)
-		return _asm_mflo
+		return 	self.encoder(_asm_mflo, 'mflo', d = reg_d)
 		
 	def ins_mfhi(self, args):
 		"""
@@ -769,8 +752,7 @@ class InstructionAssembler(object):
 		def _asm_mfhi(b):
 			b[reg_d] = b.HI
 
-		self.encoder(_asm_mfhi, 'mfhi', d = reg_d)
-		return _asm_mfhi
+		return self.encoder(_asm_mfhi, 'mfhi', d = reg_d)
 		
 	def ins_mtlo(self, args):
 		"""
@@ -783,8 +765,7 @@ class InstructionAssembler(object):
 		def _asm_mtlo(b):
 			b.LO = b[reg_s]
 
-		self.encoder(_asm_mtlo, 'mtlo', s = reg_s)
-		return _asm_mtlo
+		return self.encoder(_asm_mtlo, 'mtlo', s = reg_s)
 		
 	def ins_mthi(self, args):
 		"""
@@ -797,8 +778,7 @@ class InstructionAssembler(object):
 		def _asm_mthi(b):
 			b.HI = b[reg_s]
 
-		self.encoder(_asm_mthi, 'mthi', s = reg_s)
-		return _asm_mthi
+		return self.encoder(_asm_mthi, 'mthi', s = reg_s)
 		
 ############################################################
 ###### Kernel/misc instructions
@@ -812,8 +792,7 @@ class InstructionAssembler(object):
 		def _asm_nop(b):
 			pass
 		
-		self.encoder(_asm_nop, 'nop')
-		return _asm_nop
+		return self.encoder(_asm_nop, 'nop')
 		
 	def ins_mfc0(self, args):
 		"""
@@ -830,8 +809,7 @@ class InstructionAssembler(object):
 				raise MIPS_Exception('RI')
 			b[reg_t] = b.CP0[reg_d]
 		
-		self.encoder(_asm_mfc0, 'mfc0', t = reg_t, d = reg_d)
-		return _asm_mfc0
+		return self.encoder(_asm_mfc0, 'mfc0', t = reg_t, d = reg_d)
 	
 	def ins_mtc0(self, args):
 		"""
@@ -848,8 +826,7 @@ class InstructionAssembler(object):
 				raise MIPS_Exception('RI')
 			b.CP0[reg_d] = b[reg_t]
 		
-		self.encoder(_asm_mtc0, 'mtc0', s = 4, d = reg_d, t = reg_t)
-		return _asm_mtc0
+		return self.encoder(_asm_mtc0, 'mtc0', s = 4, d = reg_d, t = reg_t)
 		
 	def ins_rfe(self, args):
 		"""
@@ -867,11 +844,8 @@ class InstructionAssembler(object):
 			
 			# shift them right, but put back only 4 lower bits (to bring 0s from the right) 
 			b.CP0.Status |= (lowbits >> 2) & 0xF
-			
-		self.encoder(_asm_rfe, 'rfe', s = 0x10)
-		setattr(_asm_rfe, '_delay', True)
 		
-		return _asm_rfe
+		return self.encoder(_asm_rfe, 'rfe', s = 0x10, do_delay = True)
 		
 	def ins_syscall(self, args):
 		"""
@@ -882,6 +856,5 @@ class InstructionAssembler(object):
 		def _asm_syscall(b):
 			raise MIPS_Exception("SYSCALL")
 		
-		self.encoder(_asm_syscall, 'syscall')
-		return _asm_syscall
+		return self.encoder(_asm_syscall, 'syscall')
 		

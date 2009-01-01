@@ -160,10 +160,10 @@ class VirtualMachine(object):
 			device.tick()
 			
 	def __runInstruction(self, instruction):
-		if not hasattr(instruction, '__call__'):
+		if not hasattr(instruction, '_vm_asm'):
 			raise self.RuntimeVMException("Attempted to execute non-instruction at 0x%08X\n" % self.regBank.PC)
 			
-		instruction(self.regBank)
+		instruction._vm_asm(self.regBank)
 				
 	def __vm_loop(self):
 		while self.running:
@@ -172,17 +172,17 @@ class VirtualMachine(object):
 
 				did_delay_slot = False
 				oldPC = self.regBank.PC
-				instruction = self.memory.getInstruction(self.regBank.PC)
+				instruction = self.memory[self.regBank.PC, 4]
 				
 				# if the instruction does have a delay, and delay slots are enabled
 				# we need to handle it...
-				if hasattr(instruction, '_delay') and self.enableDelaySlot:
+				if hasattr(instruction, '_delay') and instruction._delay and self.enableDelaySlot:
 					
 					# what we are doing is fetching the instruction AFTER the current
 					# one (the one which should go into the delay slot) and executing
 					# it first...
 					did_delay_slot = True
-					delay_slot = self.memory.getInstruction(self.regBank.PC + 0x4)
+					delay_slot = self.memory[self.regBank.PC + 0x4, 4]
 					
 					if self.verboseSteps:
 						_debug('[DELAYED BR]\n' + buildLineOfCode(self.regBank.PC + 0x4, delay_slot))

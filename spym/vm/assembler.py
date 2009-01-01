@@ -107,7 +107,7 @@ class AssemblyParser(object):
 					
 						for inst in inst_code:
 							if hasattr(inst, '_inst_bld_tmp'):
-								local_instructions.append((self.cur_address, inst))
+								local_instructions.append(self.cur_address)
 											
 							self.memory[self.cur_address] = inst
 							self.cur_address += 0x4
@@ -117,8 +117,8 @@ class AssemblyParser(object):
 						
 		self.parsedFiles += 1
 		
-		for (inst_address, instruction) in local_instructions:
-			self.instruction_assembler.resolveLabels(instruction, inst_address, self.local_labels)
+		for inst_address in local_instructions:
+			self.memory[inst_address] = self.instruction_assembler.resolveLabels(self.memory[inst_address], inst_address, self.local_labels)
 		
 		for (label, address) in self.global_labels.items():
 			if address is None:
@@ -129,8 +129,13 @@ class AssemblyParser(object):
 			
 	def resolveGlobalDependencies(self):
 		for (inst_address, instruction) in self.memory.getInstructionData():
-			if hasattr(instruction, '_inst_bld_tmp') and not self.instruction_assembler.resolveLabels(instruction, inst_address, self.global_labels):
-				raise self.ParserException("Cannot resolve label in instruction '%s' @ %08X" % (str(instruction._inst_bld_tmp), inst_address))
+			if hasattr(instruction, '_inst_bld_tmp'):
+				new_instruction = self.instruction_assembler.resolveLabels(instruction, inst_address, self.global_labels)
+				
+				if hasattr(new_instruction, '_inst_bld_tmp'):
+					raise self.ParserException("Cannot resolve label in instruction '%s' @ %08X" % (str(instruction._inst_bld_tmp), inst_address))
+					
+				self.memory[inst_address] = new_instruction
 		
 	def __parseLine(self, line):
 		line_label = None

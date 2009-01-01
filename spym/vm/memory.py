@@ -24,6 +24,43 @@ OTHER DEALINGS IN THE SOFTWARE.
 """""
 from spym.common.utils import buildLineOfCode
 from spym.vm.exceptions import MIPS_Exception
+from spym.vm.devices.cache import MIPSCache_TEMPLATE
+
+# class MemoryManager(object):
+# 	def __init__(self, vm_ptr, L1_data_cache = {}, L1_code_cache = {}, L2_data_cache = {}, L2_code_cache = {}):
+# 		self.main_memory = MainMemory(vm_ptr, 32) # default block size, 8 words
+# 		
+# 		if L1_code_cache and L1_data_cache:
+# 			self.__initCache_Dual(1, L1_data_cache, L1_code_cache)
+# 			
+# 		elif L1_code_cache or L1_data_cache:
+# 			self.__initCache_Unified(1, L1_data_cache or L1_code_cache)
+# 			
+# 			if L2_code_cache and L2_code_cache:
+# 				self.__initCache_Dual(2, L2_data_cache, L2_code_cache)
+# 			else:
+# 				self.__initCache_Unified(2, L2_data_cache or L2_code_cache)
+# 		
+# 		
+# 	def __initCache_Unified(self, level, cache_data):
+# 		if not cache: return
+# 		cache_instance = MIPSCache_TEMPLATE(self, **cache_data)
+# 		
+# 						
+# 	def __initCache_Dual(self, level, data_cache, code_cache):
+# 		
+# 	def getInstruction(self, address):
+# 		
+# 	
+# 	def __getitem__(self, address):
+# 		if isinstance(address, tuple):
+# 			address, size = address
+# 			
+# 		if 'text' in self.main_memory.getSegment(address):
+			
+		
+			
+		
 
 class MemoryManager(object):
 	SEGMENT_DATA = {
@@ -51,33 +88,27 @@ class MemoryManager(object):
 		
 		def __init__(self, blockSize):
 			self.BLOCK_SIZE = blockSize
-			self.contents = 0x0
+			self.contents = [0x0, ] * (blockSize // 4)
 			
 		def getData(self, size, offset):
-			assert(offset <= self.BLOCK_SIZE)				
-			return (self.contents >> (offset * 8)) & self.SIZE_MASKS[size]
+			assert(offset <= self.BLOCK_SIZE)
+			
+			word = self.contents[offset // 4]
+			offset = offset % 4
+							
+			return word if not offset and size == 4 else (word >> (offset * 8)) & self.SIZE_MASKS[size]
 			
 		def setData(self, size, offset, value):
 			assert(offset <= self.BLOCK_SIZE)
-			self.contents = self.contents & ~(self.SIZE_MASKS[size] << (offset * 8))
-			self.contents = self.contents | ((value & self.SIZE_MASKS[size]) << (offset * 8))
 			
-	class CodeBlock(object):
-		def __init__(self, blockSize):
-			self.inst_count = blockSize // 4
-			self.contents = [None, ] * self.inst_count
+			word_offset = offset // 4
+			offset = offset % 4
 			
-		def setData(self, size, offset, value):
-			if size != 4 or offset % 4:
-				raise MemoryManager.UnalignedMemoryAccess
-			
-			self.contents[offset // 4] = value
-			
-		def getData(self, size, offset):
-			if size != 4 or offset % 4:
-				raise MemoryManager.UnalignedMemoryAccess
-			
-			return self.contents[offset // 4] or 0x0
+			if not offset and size == 4:
+				self.contents[word_offset] = value
+			else:
+				self.contents[word_offset] &= ~(self.SIZE_MASKS[size] << (offset * 8))
+				self.contents[word_offset] |=  ((value & self.SIZE_MASKS[size]) << (offset * 8))
 	
 	def __init__(self, vm, blockSize):
 		self.BLOCK_SIZE = blockSize
@@ -86,17 +117,12 @@ class MemoryManager(object):
 		self.devices_memory_map = {}
 		
 	def __allocate(self, address):
-		if 'text' in self.getSegment(address):
-			newBlock = self.CodeBlock(self.BLOCK_SIZE)
-		else:
-			newBlock = self.MemoryBlock(self.BLOCK_SIZE)
-
-		self.memory[address // self.BLOCK_SIZE] = newBlock
+		self.memory[address // self.BLOCK_SIZE] = self.MemoryBlock(self.BLOCK_SIZE)
 	
 	def __contains__(self, address):
 		return (address // self.BLOCK_SIZE) in self.memory
 		
-	def __getData(self, address, size, binary = True):
+	def __getData(self, address, size):
 		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
 			raise MIPS_Exception('ADDRL', badaddr = address)
 			
@@ -110,8 +136,7 @@ class MemoryManager(object):
 		if not self.__contains__(address):
 			return 0x0
 		
-		data = self.memory[address // self.BLOCK_SIZE].getData(size, address % self.BLOCK_SIZE)
-		return data.mem_content if binary and hasattr(data, 'mem_content') else data
+		return self.memory[address // self.BLOCK_SIZE].getData(size, address % self.BLOCK_SIZE)
 		
 		
 	def __setData(self, address, size, data):
@@ -131,13 +156,10 @@ class MemoryManager(object):
 			
 		destinationBlock = self.memory[address // self.BLOCK_SIZE]
 		
-		if hasattr(data, '__call__') and not isinstance(destinationBlock, self.CodeBlock):
+		if hasattr(data, '_vm_asm') and 'text' not in self.getSegment(address):
 			raise AssemblyParser.ParserException("Cannot assemble instructions in data-only segments.")
 			
 		self.memory[address // self.BLOCK_SIZE].setData(size, address % self.BLOCK_SIZE, data)
-	
-	def getInstruction(self, address):
-		return self.__getData(address, 4, False)
 		
 	def getWord(self, address):
 		return self.__getData(address, 4)
@@ -167,22 +189,17 @@ class MemoryManager(object):
 	def getNextFreeBlock(self, address):		
 		while address in self:
 			block = self.memory[address // self.BLOCK_SIZE]
-			if isinstance(block, self.CodeBlock) and not any(block.contents):
-				return address
-				
-			if isinstance(block, self.MemoryBlock) and block.contents == 0:
+			if not any(block.contents):
 				return address
 			
 			address += self.BLOCK_SIZE
 			
 		return address
-				
 		
 	def getInstructionData(self):
 		for (address, block) in self.memory.items():
-			if isinstance(block, self.CodeBlock):
-				for (addr_offset, ins) in enumerate(block.contents):
-					if ins: yield (address * self.BLOCK_SIZE + addr_offset * 0x4, ins)
+			for (addr_offset, ins) in enumerate(block.contents):
+				if hasattr(ins, '_vm_asm'): yield (address * self.BLOCK_SIZE + addr_offset * 0x4, ins)
 	
 	def clear(self):
 		del(self.memory)
@@ -219,15 +236,16 @@ class MemoryManager(object):
 			if current_section != self.getSegment(address):
 				current_section = self.getSegment(address)
 				output += "\n        %s\n" % current_section.upper()
-				
-			if isinstance(block, self.CodeBlock):			
+			
+			
+			if 'text' in current_section:			
 				for i in range(self.BLOCK_SIZE // 4):
 					ins = block.contents[i]
-					if ins: output += buildLineOfCode((address + i * 4), ins)
+					if hasattr(ins, '_vm_asm'):
+						output += buildLineOfCode((address + i * 4), ins)
 											
-			elif isinstance(block, self.MemoryBlock):
+			elif 'data' in current_section:
 				data = block.contents
-				
 				output += "[0x%08X..0x%08X]  " % ((address + self.BLOCK_SIZE - 4), address)
 				
 				if data == 0:
@@ -242,18 +260,9 @@ class MemoryManager(object):
 		return output				
 		
 	def __str__(self):				
-		data_contents = []
-		text_contents = []
-		
-		for (address, block) in self.memory.items():
-			if isinstance(block, self.MemoryBlock):
-				data_contents.append(address)
-			elif isinstance(block, self.CodeBlock):
-				text_contents.append(address)
-				
 		memContents = "MIPS R2000 Virtual Memory\n"
 		memContents += "  * 4GB addressing space\n"
-		memContents += "  * %d blocks allocated (%d data blocks, %d text blocks)\n" % (len(self.memory), len(data_contents), len(text_contents))
+		memContents += "  * %d blocks allocated\n" % len(self.memory)
 		memContents += "  * Block Size set at %d Bytes (%d Words per block)\n" % (self.BLOCK_SIZE, self.BLOCK_SIZE // 4)
 		
 		if self.memory:
