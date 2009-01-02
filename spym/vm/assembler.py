@@ -92,7 +92,9 @@ class AssemblyParser(object):
 				if identifier:
 					if identifier[0] == '.':
 						old_line_start = self.cur_address
-						new_line_start, self.cur_address = self.preprocessor(identifier, args, self.cur_address)
+						
+						new_line_start, self.cur_address = self.preprocessor(
+							identifier, args, self.cur_address)
 						
 						for (l, a) in self.local_labels.items():
 							if a == old_line_start:
@@ -103,7 +105,8 @@ class AssemblyParser(object):
 						if not isinstance(inst_code, list):
 							inst_code = [inst_code, ]
 
-						setattr(inst_code[0], 'orig_text', "%03d:  %s" % (line_no, line.strip()))
+						setattr(inst_code[0], 'orig_text', 
+							"%03d:  %s" % (line_no, line.strip()))
 					
 						for inst in inst_code:
 							if hasattr(inst, '_inst_bld_tmp'):
@@ -112,28 +115,44 @@ class AssemblyParser(object):
 							self.memory[self.cur_address, 4] = inst
 							self.cur_address += 0x4
 					
-			except (self.ParserException, AssemblyPreprocessor.PreprocessorException, InstructionAssembler.InstructionAssemblerException) as exc:
-				raise self.ParsingFailed("\nLINE %d:\t%s\n  %s" % (line_no, line.strip(), exc))
+			except (self.ParserException, 
+					AssemblyPreprocessor.PreprocessorException, 
+					InstructionAssembler.InstructionAssemblerException) 
+					as parsing_exception:
+					
+				raise self.ParsingFailed("\nLINE %d:\t%s\n  %s" % (
+					line_no, line.strip(), parsing_exception))
 						
 		self.parsedFiles += 1
 		
 		for inst_address in local_instructions:
-			self.memory[inst_address, 4] = self.instruction_assembler.resolveLabels(self.memory[inst_address, 4], inst_address, self.local_labels)
+			self.memory[inst_address, 4] = \
+				self.instruction_assembler.resolveLabels(
+					self.memory[inst_address, 4], 
+					inst_address, 
+					self.local_labels)
 		
 		for (label, address) in self.global_labels.items():
 			if address is None:
 				if label not in self.local_labels:
-					raise self.LabelException("Missing globally defined label '%s'" % label)
+					raise self.LabelException(
+						"Missing globally defined label '%s'" % label)
 
 				self.global_labels[label] = self.local_labels[label]
 			
 	def resolveGlobalDependencies(self):
 		for (inst_address, instruction) in self.memory.getInstructionData():
 			if hasattr(instruction, '_inst_bld_tmp'):
-				new_instruction = self.instruction_assembler.resolveLabels(instruction, inst_address, self.global_labels)
+				
+				new_instruction = self.instruction_assembler.resolveLabels(
+					instruction, 
+					inst_address, 
+					self.global_labels)
 				
 				if hasattr(new_instruction, '_inst_bld_tmp'):
-					raise self.ParserException("Cannot resolve label in instruction '%s' @ %08X" % (str(instruction._inst_bld_tmp), inst_address))
+					raise self.ParserException(
+						"Cannot resolve label in instruction '%s' @ %08X" % (
+							str(instruction._inst_bld_tmp), inst_address))
 					
 				self.memory[inst_address, 4] = new_instruction
 		

@@ -74,9 +74,14 @@ class InstructionAssembler(object):
 				func = getattr(self, attr)
 				
 				if not func.__doc__:
-					raise self.SyntaxException("Missing syntax data for instruction '%s'." % func_name)
+					raise self.SyntaxException(
+						"Missing syntax data for instruction '%s'." % 
+							func_name)
 				
-				self.asm_metadata[attr] = self.__parseSyntaxData(func_name, func.__doc__, (func_type == 'pins'))
+				self.asm_metadata[attr] = self.__parseSyntaxData(
+					func_name, 
+					func.__doc__, 
+					(func_type == 'pins'))
 		
 	def __parseSyntaxData(self, func_name, docstring, pseudo):
 		opcode = None
@@ -106,21 +111,30 @@ class InstructionAssembler(object):
 				encoding = contents
 
 		if opcode is None and not pseudo:
-			raise self.SyntaxException("Cannot resolve Opcode for instruction '%s'" % func_name)
+			raise self.SyntaxException(
+				"Cannot resolve Opcode for instruction '%s'" % 
+					func_name)
 		
 		if encoding is None and not pseudo:
-			raise self.SyntaxException("Cannot resolve encoding type for instruction '%s'" % func_name)
+			raise self.SyntaxException(
+				"Cannot resolve encoding type for instruction '%s'" % 
+						func_name)
 			
 		if fcode is None and encoding == 'R':
-			raise self.SyntaxException("Missing function code for 'r' encoding instruction '%s'" % func_name)
+			raise self.SyntaxException(
+				"Missing function code for 'r' encoding instruction '%s'" % 
+					func_name)
 			
 		if syntax is None:
-			raise self.SyntaxException("Cannot find syntax information for instruction '%s'" % func_name)
+			raise self.SyntaxException(
+				"Cannot find syntax information for instruction '%s'" % 
+					func_name)
 			
 		if argcount is None:
 			if custom_syntax:
 				if not syntax.startswith(func_name):
-					raise self.SyntaxException("Malformed syntax definition. Expecting instruction syntax in the ")
+					raise self.SyntaxException(
+						"Malformed syntax definition in instruction.")
 				else:
 					syntax = syntax[len(func_name):]
 					syntax.strip()
@@ -131,7 +145,8 @@ class InstructionAssembler(object):
 		
 	def _checkArguments(self, args, count):
 		if len(args) != count:
-			raise self.InstructionAssemblerException("Wrong argument count in instruction.")
+			raise self.InstructionAssemblerException(
+				"Wrong argument count in instruction.")
 			
 	def _parseRegister(self, reg):
 		if reg in RegisterBank.REGISTER_NAMES:
@@ -141,10 +156,12 @@ class InstructionAssembler(object):
 		register_id = int(reg_match.group(1)) if reg_match else -1
 
 		if not 0 <= register_id < 32:
-			raise self.InstructionAssemblerException("Invalid register name (%s)" % reg)
+			raise self.InstructionAssemblerException(
+				"Invalid register name (%s)" % reg)
 			
 		if register_id == 1 and self.assembler_register_protected:
-			raise self.InstructionAssemblerException("The $1 register is reserver for assembler operations.")
+			raise self.InstructionAssemblerException(
+				"The $1 register is reserver for assembler operations.")
 
 		return register_id
 		
@@ -155,7 +172,8 @@ class InstructionAssembler(object):
 		try:
 			imm = int(imm, 0)
 		except (ValueError, TypeError):
-			raise self.InstructionAssemblerException("Invalid immediate value '%s'." % imm)
+			raise self.InstructionAssemblerException(
+				"Invalid immediate value '%s'." % imm)
 			
 		return imm
 		
@@ -166,15 +184,22 @@ class InstructionAssembler(object):
 			
 		paren_match = re.match(self.LOADSTORE_ADDRESS_REGEX, addr)
 		if not paren_match:
-			raise self.InstructionAssemblerException("Wrong argument: Expected address definition in the form of 'immediate($register)'.")
+			raise self.InstructionAssemblerException(
+				"Expected address definition in the form of 'imm($reg)'.")
 			
 		try:
 			immediate = int(paren_match.group(1), 0)
 			register = self._parseRegister(paren_match.group(2))
+			
 		except ValueError:
-			raise self.InstructionAssemblerException("Error when parsing composite address '%s': Invalid immediate value." % addr)
+			raise self.InstructionAssemblerException(
+				"""Error when parsing composite address '%s': 
+				Invalid immediate value.""" % addr)
+				
 		except self.InvalidRegisterName:
-			raise self.InstructionAssemblerException("Error when parsing composite address '%s': Invalid register value." % addr)
+			raise self.InstructionAssemblerException(
+				"""Error when parsing composite address '%s': 
+				Invalid register value.""" % addr)
 			
 		return (immediate, register)
 		
@@ -183,7 +208,8 @@ class InstructionAssembler(object):
 		func = 'ins_' + func
 		
 		if not hasattr(self, func):
-			raise self.InstructionAssemblerException("Unknown instruction: '%s'" % func)
+			raise self.InstructionAssemblerException(
+				"Unknown instruction: '%s'" % func)
 			
 		argcount = self.asm_metadata[func][1]
 		self._checkArguments(args, argcount)
@@ -209,10 +235,13 @@ class InstructionAssembler(object):
 				label_address = label_address)
 
 		elif data[0] == 'branch':
+			immediate_encoding = u32((label_address - 
+				func_addr + self.BRANCH_ENCODING_MOD) >> 2)
+				
 			new_instruction = self.encoder(instruction._vm_asm, func_name, 
 				s = data[3], 
 				t = data[4], 
-				imm = u32((label_address - func_addr + self.BRANCH_ENCODING_MOD) >> 2), 
+				imm = immediate_encoding
 				label = label,
 				label_address = label_address)
 		
@@ -231,7 +260,8 @@ class InstructionAssembler(object):
 			result = _lambda_f(b[reg_s], b[reg_t])
 			b[reg_d] = result
 			
-		return self.encoder(_asm_arith, func_name, d = reg_d, s = reg_s, t = reg_t)
+		return self.encoder(_asm_arith, func_name, 
+			d = reg_d, s = reg_s, t = reg_t)
 		
 	def shift_TEMPLATE(self, func_name, args, shift_imm, _lambda_f):
 		reg_d = self._parseRegister(args[0])
@@ -249,7 +279,8 @@ class InstructionAssembler(object):
 			def _asm_shift(b):
 				b[reg_d] = _lambda_f(b[reg_t], b[reg_s])
 		
-		return self.encoder(_asm_shift, func_name, d = reg_d, t = reg_t, s = reg_s, shift = shift)
+		return self.encoder(_asm_shift, func_name, 
+			d = reg_d, t = reg_t, s = reg_s, shift = shift)
 		
 		
 	def imm_TEMPLATE(self, func_name, args, _lambda_f):			
@@ -260,7 +291,8 @@ class InstructionAssembler(object):
 		def _asm_imm(b):
 			b[reg_t] = _lambda_f(b[reg_s], immediate)
 			
-		return self.encoder(_asm_imm, func_name, s = reg_s, t = reg_t, imm = immediate)
+		return self.encoder(_asm_imm, func_name, 
+			s = reg_s, t = reg_t, imm = immediate)
 		
 	def branch_TEMPLATE(self, func_name, label, s, t, _lambda_f, link = False):
 		reg_s = self._parseRegister(s)
@@ -271,7 +303,8 @@ class InstructionAssembler(object):
 				if link: b[31] = b.PC + self.JAL_OFFSET
 				b.PC = _asm_branch.label_address
 	
-		return self.encoder.tmpEncoding(_asm_branch, ('branch', func_name, label, reg_s, reg_t))
+		return self.encoder.tmpEncoding(_asm_branch, 
+			('branch', func_name, label, reg_s, reg_t))
 
 	def storeload_TEMPLATE(self, func_name, args, size, unsigned = False):		
 		imm, reg_s = self._parseAddress(args[1])
@@ -279,14 +312,18 @@ class InstructionAssembler(object):
 		
 		_sign_f = (lambda i, size: i) if unsigned else extsgn
 		
-		if func_name[0] == 'l': # load instruction
+		# load instruction
+		if func_name[0] == 'l':
 			def _asm_storeload(b):
 				b[reg_t] = _sign_f(b.memory[(imm + u32(b[reg_s])), size], size)
-		elif func_name[0] == 's': # store instruction
+				
+		# store instruction
+		elif func_name[0] == 's': 
 			def _asm_storeload(b):
 				b.memory[(imm + u32(b[reg_s])), size] = b[reg_t]
 				
-		return self.encoder(_asm_storeload, func_name, t = reg_t, s = reg_s, imm = imm)
+		return self.encoder(_asm_storeload, func_name, 
+			t = reg_t, s = reg_s, imm = imm)
 		
 ############################################################
 ###### Integer arithmetic
@@ -298,7 +335,11 @@ class InstructionAssembler(object):
 			Syntax: ArithLog
 		"""
 		add_name = 'addu' if unsigned else 'add'
-		add_func = (lambda a, b: a + b) if unsigned else (lambda a, b: s32(a) + s32(b))
+		
+		if unsigned:
+			add_func = lambda a, b: a + b
+		else:
+			add_func = lambda a, b: s32(a) + s32(b)
 		
 		return self.arith_TEMPLATE(add_name, args, add_func)
 		
@@ -386,7 +427,10 @@ class InstructionAssembler(object):
 			Syntax: ArithLog
 		"""
 		sub_name = 'subu' if unsigned else 'sub'
-		sub_func = (lambda a, b: a - b) if unsigned else (lambda a, b: s32(a) - s32(b))
+		if unsigned:
+			sub_func = lambda a, b: a - b
+		else:
+			sub_func = lambda a, b: s32(a) - s32(b)
 		
 		return self.arith_TEMPLATE(sub_name, args, sub_func)
 
@@ -517,7 +561,8 @@ class InstructionAssembler(object):
 			Fcode: 101010
 			Syntax: ArithLog
 		"""
-		return self.arith_TEMPLATE('slt', args, lambda a, b: 1 if s32(a) < s32(b) else 0)
+		return self.arith_TEMPLATE('slt', args, 
+			lambda a, b: 1 if s32(a) < s32(b) else 0)
 		
 	def ins_sltu(self, args):
 		"""
@@ -525,14 +570,16 @@ class InstructionAssembler(object):
 			Fcode: 101001
 			Syntax: ArithLog
 		"""
-		return self.arith_TEMPLATE('sltu', args, lambda a, b: 1 if u32(a) < u32(b) else 0)
+		return self.arith_TEMPLATE('sltu', args, 
+			lambda a, b: 1 if u32(a) < u32(b) else 0)
 		
 	def ins_sltiu(self, args):
 		"""
 			Opcode: 001001
 			Syntax: ArithLogI
 		"""
-		return self.imm_TEMPLATE('sltiu', args, lambda a, b: 1 if u32(a) < b else 0)
+		return self.imm_TEMPLATE('sltiu', args, 
+			lambda a, b: 1 if u32(a) < b else 0)
 		
 	def ins_slti(self, args):
 		"""
@@ -540,7 +587,8 @@ class InstructionAssembler(object):
 			Fcode: 001010
 			Syntax: ArithLog
 		"""
-		return self.imm_TEMPLATE('slti', args, lambda a, b: 1 if s32(a) < b else 0)
+		return self.imm_TEMPLATE('slti', args, 
+			lambda a, b: 1 if s32(a) < b else 0)
 
 
 ############################################################
@@ -551,56 +599,64 @@ class InstructionAssembler(object):
 			Opcode: 000100
 			Syntax: Branch
 		"""
-		return self.branch_TEMPLATE('beq', args[2], args[0], args[1], lambda a, b: a == b)
+		return self.branch_TEMPLATE('beq', 
+			args[2], args[0], args[1], lambda a, b: a == b)
 		
 	def ins_bne(self, args):
 		"""
 			Opcode: 000101
 			Syntax: Branch
 		"""
-		return self.branch_TEMPLATE('bne', args[2], args[0], args[1], lambda a, b: a != b)
+		return self.branch_TEMPLATE('bne', 
+			args[2], args[0], args[1], lambda a, b: a != b)
 		
 	def ins_bgez(self, args):
 		"""
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		return self.branch_TEMPLATE('bgez', args[1], args[0], 0x1, lambda a, b: a >= 0)
+		return self.branch_TEMPLATE('bgez', 
+			args[1], args[0], 0x1, lambda a, b: a >= 0)
 		
 	def ins_bgezal(self, args):
 		"""
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		return self.branch_TEMPLATE('bgezal', args[1], args[0], 0x11, lambda a, b: a >= 0, True)
+		return self.branch_TEMPLATE('bgezal', 
+			args[1], args[0], 0x11, lambda a, b: a >= 0, True)
 		
 	def ins_bgtz(self, args):
 		"""
 			Opcode: 000111
 			Syntax: BranchZ
 		"""
-		return self.branch_TEMPLATE('bgtz', args[1], args[0], 0, lambda a, b: a > 0)
+		return self.branch_TEMPLATE('bgtz', 
+			args[1], args[0], 0, lambda a, b: a > 0)
 		
 	def ins_blez(self, args):
 		"""
 			Opcode: 000110
 			Syntax: BranchZ
 		"""
-		return self.branch_TEMPLATE('blez', args[1], args[0], 0, lambda a, b: a <= 0)
+		return self.branch_TEMPLATE('blez', 
+			args[1], args[0], 0, lambda a, b: a <= 0)
 
 	def ins_bltz(self, args):
 		"""
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		return self.branch_TEMPLATE('bltz', args[1], args[0], 0, lambda a, b: a < 0)
+		return self.branch_TEMPLATE('bltz', 
+			args[1], args[0], 0, lambda a, b: a < 0)
 
 	def ins_bltzal(self, args):
 		"""
 			Opcode: 000001
 			Syntax: BranchZ
 		"""
-		return self.branch_TEMPLATE('bltzal', args[1], args[0], 0x10, lambda a, b: a < 0, True)
+		return self.branch_TEMPLATE('bltzal', 
+			args[1], args[0], 0x10, lambda a, b: a < 0, True)
 
 
 ############################################################
@@ -842,7 +898,7 @@ class InstructionAssembler(object):
 			lowbits = b.CP0.Status & 0x3F # get the lowest 6 bits
 			b.CP0.Status &= ~0x3F		  # clear the SIX lowest bits
 			
-			# shift them right, but put back only 4 lower bits (to bring 0s from the right) 
+			# shift them right, but put back only 4 lower bits
 			b.CP0.Status |= (lowbits >> 2) & 0xF
 		
 		return self.encoder(_asm_rfe, 'rfe', s = 0x10, do_delay = True)

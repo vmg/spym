@@ -42,29 +42,48 @@ class MemoryManager(object):
 		L2_data_cache = None
 		L2_code_cache = None
 		
-		if isinstance(L1_cache_CFG, tuple):	L1_data_CFG, L1_code_CFG = L1_cache_CFG
-		else:								L1_data_CFG, L1_code_CFG = L1_cache_CFG, None
+		if isinstance(L1_cache_CFG, tuple):	
+			L1_data_CFG, L1_code_CFG = L1_cache_CFG
+		else:								
+			L1_data_CFG, L1_code_CFG = L1_cache_CFG, None
 		
-		if isinstance(L2_cache_CFG, tuple):	L2_data_CFG, L2_code_CFG = L2_cache_CFG
-		else:								L2_data_CFG, L2_code_CFG = L2_cache_CFG, None
+		if isinstance(L2_cache_CFG, tuple):	
+			L2_data_CFG, L2_code_CFG = L2_cache_CFG
+		else:								
+			L2_data_CFG, L2_code_CFG = L2_cache_CFG, None
 			
 		if L2_data_CFG:
-			L2_data_cache = MIPSCache_TEMPLATE('LVL2 CACHE', self.main_memory, **L2_data_CFG)
+			L2_data_cache = MIPSCache_TEMPLATE(
+				'LVL2 CACHE', 
+				self.main_memory, 
+				**L2_data_CFG)
 		
 		if L2_code_CFG:
-			L2_code_cache = MIPSCache_TEMPLATE('LVL2 CACHE', self.main_memory, **L2_code_CFG)
+			L2_code_cache = MIPSCache_TEMPLATE(
+				'LVL2 CACHE', 
+				self.main_memory, 
+				**L2_code_CFG)
 			
 		L2_code_cache = L2_code_cache or L2_data_cache
 		L2_data_cache = L2_data_cache or L2_code_cache
 		
-		if (L2_code_cache or L2_data_cache) and not (L1_code_CFG or L1_data_CFG):
-			raise Exception("Cannot instantiate Level 2 caches if Level 1 are not present.")
+		if (L2_data_cache) and not (L1_code_CFG or L1_data_CFG):
+			raise Exception(
+				"""
+				Cannot instantiate Level 2 caches if Level 1 are not present.
+				""")
 			
 		if L1_data_CFG:
-			L1_data_cache = MIPSCache_TEMPLATE('DATA CACHE', L2_data_cache or self.main_memory, **L1_data_CFG)
+			L1_data_cache = MIPSCache_TEMPLATE(
+				'DATA CACHE', 
+				L2_data_cache or self.main_memory, 
+				**L1_data_CFG)
 			
 		if L1_code_CFG:
-			L1_code_cache = MIPSCache_TEMPLATE('CODE CACHE', L2_code_cache or self.main_memory, **L1_code_CFG)
+			L1_code_cache = MIPSCache_TEMPLATE(
+				'CODE CACHE', 
+				L2_code_cache or self.main_memory, 
+				**L1_code_CFG)
 			
 		self.data_access = L1_data_cache or L1_code_cache or self.main_memory
 		self.code_access = L1_code_cache or L1_data_cache or self.main_memory
@@ -76,10 +95,14 @@ class MemoryManager(object):
 		elif address % 2 == 0:	size = 2
 		else:					size = 1
 		
-		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Invalid address %08X (%d)' % (address, size))
+		if 	(address % size) or (
+			not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
+			raise MIPS_Exception('ADDRS', 
+				badaddr = address, 
+				debug_msg = 'Invalid address %08X (%d)' % (address, size))
 		
-		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]:
+		if 	self.vm and self.vm.getAccessMode() == 'user' and not (
+			self.USER_READ_SPACE[0] <= address <= self.USER_READ_SPACE[1]):
 			raise MIPS_Exception('RI', badaddr = address)
 			
 		if address & ~0x3 in self.devices_memory_map:
@@ -102,11 +125,19 @@ class MemoryManager(object):
 		elif address % 2 == 0:	size = 2
 		else:					size = 1
 		
-		if 	(address % size) or (not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-			raise MIPS_Exception('ADDRS', badaddr = address, debug_msg = 'Invalid address %08X (%d)' % (address, size))
+		if 	(address % size) or (
+			not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
+			
+			raise MIPS_Exception('ADDRS', 
+				badaddr = address, 
+				debug_msg = 'Invalid address %08X (%d)' % (address, size))
 		
-		if self.vm and self.vm.getAccessMode() == 'user' and not self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]:
-			raise MIPS_Exception('RI', badaddr = address, debug_msg = 'Attempted to write in protected space.') # FIXME: is this the right exception?
+		if 	self.vm and self.vm.getAccessMode() == 'user' and not (
+			self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]):
+			
+			raise MIPS_Exception('RI', 
+				badaddr = address, 
+				debug_msg = 'Attempted to write in protected space.')
 		
 		if address & ~0x3 in self.devices_memory_map:
 			device = self.devices_memory_map[address]
@@ -142,8 +173,11 @@ class MainMemory(object):
 			
 			word = self.contents[offset // 4]
 			offset = offset % 4
+			
+			if not offset and size == 4:
+				return word
 							
-			return word if not offset and size == 4 else (word >> (offset * 8)) & self.SIZE_MASKS[size]
+			return (word >> (offset * 8)) & self.SIZE_MASKS[size]
 			
 		def setData(self, size, offset, value):
 			assert(offset <= self.BLOCK_SIZE)
@@ -154,8 +188,11 @@ class MainMemory(object):
 			if not offset and size == 4:
 				self.contents[word_offset] = value
 			else:
-				self.contents[word_offset] &= ~(self.SIZE_MASKS[size] << (offset * 8))
-				self.contents[word_offset] |=  ((value & self.SIZE_MASKS[size]) << (offset * 8))
+				self.contents[word_offset] &= \
+					~(self.SIZE_MASKS[size] << (offset * 8))
+					
+				self.contents[word_offset] |=  \
+					((value & self.SIZE_MASKS[size]) << (offset * 8))
 	
 	def __init__(self, vm, blockSize):
 		self.BLOCK_SIZE = blockSize
@@ -163,7 +200,8 @@ class MainMemory(object):
 		self.memory = {}
 		
 	def __allocate(self, address):
-		self.memory[address // self.BLOCK_SIZE] = self.MemoryBlock(self.BLOCK_SIZE)
+		self.memory[address // self.BLOCK_SIZE] = \
+			self.MemoryBlock(self.BLOCK_SIZE)
 	
 	def __contains__(self, address):
 		return (address // self.BLOCK_SIZE) in self.memory
@@ -171,8 +209,9 @@ class MainMemory(object):
 	def __getData(self, address, size):
 		if not self.__contains__(address):
 			return 0x0
-		
-		return self.memory[address // self.BLOCK_SIZE].getData(size, address % self.BLOCK_SIZE)
+			
+		block = self.memory[address // self.BLOCK_SIZE] 
+		return block.getData(size, address % self.BLOCK_SIZE)
 		
 		
 	def __setData(self, address, size, data):		
@@ -182,9 +221,11 @@ class MainMemory(object):
 		destinationBlock = self.memory[address // self.BLOCK_SIZE]
 		
 		if hasattr(data, '_vm_asm') and 'text' not in self.getSegment(address):
-			raise AssemblyParser.ParserException("Cannot assemble instructions in data-only segments.")
-			
-		self.memory[address // self.BLOCK_SIZE].setData(size, address % self.BLOCK_SIZE, data)
+			raise AssemblyParser.ParserException(
+				"Cannot assemble instructions in data-only segments.")
+		
+		block = self.memory[address // self.BLOCK_SIZE]
+		block.setData(size, address % self.BLOCK_SIZE, data)
 		
 	def getWord(self, address):
 		return self.__getData(address, 4)
@@ -224,7 +265,9 @@ class MainMemory(object):
 	def getInstructionData(self):
 		for (address, block) in self.memory.items():
 			for (addr_offset, ins) in enumerate(block.contents):
-				if hasattr(ins, '_vm_asm'): yield (address * self.BLOCK_SIZE + addr_offset * 0x4, ins)
+				if hasattr(ins, '_vm_asm'): 
+					inst_addr = address * self.BLOCK_SIZE + addr_offset * 0x4
+					yield (inst_addr, ins)
 	
 	def clear(self):
 		del(self.memory)
@@ -261,7 +304,8 @@ class MainMemory(object):
 											
 			elif 'data' in current_section:
 				data = block.contents
-				output += "[0x%08X..0x%08X]  " % ((address + self.BLOCK_SIZE - 4), address)
+				output += "[0x%08X..0x%08X]  " % (
+					(address + self.BLOCK_SIZE - 4), address)
 				
 				if data == 0:
 					output += "0x00000000"
@@ -278,11 +322,13 @@ class MainMemory(object):
 		memContents = "MIPS R2000 Virtual Memory\n"
 		memContents += "  * 4GB addressing space\n"
 		memContents += "  * %d blocks allocated\n" % len(self.memory)
-		memContents += "  * Block Size set at %d Bytes (%d Words per block)\n" % (self.BLOCK_SIZE, self.BLOCK_SIZE // 4)
+		memContents += "  * Block Size set at %d Bytes (%d Words per block)\n" % (
+			self.BLOCK_SIZE, self.BLOCK_SIZE // 4)
 		
 		if self.memory:
 			memContents += "  * Block data:\n"
-			memContents += self.__str_Segments(text_contents + data_contents) + "\n"
+			memContents += self.__str_Segments(
+				text_contents + data_contents) + "\n"
 			
 		return memContents
 	

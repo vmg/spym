@@ -105,11 +105,16 @@ class RegisterBank(object):
 		
 	def __str__(self):
 		regbank_output = "MIPS R2000 Register Bank\n"
-		regbank_output += ("HI: 0x%08X  |  LO: 0x%08X  |  PC: 0x%08X" % (self.HI, self.LO, self.PC)).center(74)
+		
+		regbank_output += (
+			"HI: 0x%08X  |  LO: 0x%08X  |  PC: 0x%08X" % 
+				(self.HI, self.LO, self.PC)).center(74)
+				
 		regbank_output += '\n'
 		
 		for i in range(len(self.std_registers)):
-			regbank_output += ("$%d: " % i).rjust(5) + ("0x%08X" % self.std_registers[i])
+			regbank_output += ("$%d: " % i).rjust(5)
+			regbank_output += "0x%08X" % self.std_registers[i]
 			regbank_output += "\n" if i % 4 == 3 else "  |  "
 
 		return regbank_output

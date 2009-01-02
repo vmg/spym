@@ -100,7 +100,9 @@ class VirtualMachine(object):
 			self.deviceInformation[self.CLOCK] = CPUClock_TIMER
 
 		if defaultMemoryMappedIO and virtualSyscalls:
-			raise self.ConfigVMException("Cannot virtualize I/O syscalls when memory mapped I/O is enabled.")
+			raise self.ConfigVMException(
+				"Cannot virtualize I/O syscalls when memory mapped I/O\
+				 is enabled.")
 		
 		if not loadAsBuffer and not os.path.isfile(assembly):
 			raise self.ConfigVMException("Invalid assembly file.")
@@ -111,7 +113,8 @@ class VirtualMachine(object):
 		self.__initialize()
 		
 	def __syscallVirtualization(self):
-		syscall_code = self.regBank[2] # v0 should contain the code for the syscall
+		# v0 should contain the code for the syscall
+		syscall_code = self.regBank[2] 
 		
 		if syscall_code == 1:
 			self.stdout.write(str(self.regBank[4]))
@@ -133,7 +136,8 @@ class VirtualMachine(object):
 			try:
 				number = int(number, 0)
 			except ValueError:
-				raise self.RuntimeVMException("Invalid integer in READ_INT syscall.")
+				raise self.RuntimeVMException(
+					"Invalid integer in READ_INT syscall.")
 				
 			self.regBank[2] = number
 		
@@ -151,9 +155,12 @@ class VirtualMachine(object):
 			self.memory[mem_ptr, 1] = 0
 		
 		else:
-			raise self.RuntimeVMException("Unimplemented syscall code: %d" % syscall_code)
+			raise self.RuntimeVMException(
+				"Unimplemented syscall code: %d" % syscall_code)
 			
-		self.stdout.flush() # hack: stdout gets clogged with the charspam, flush it after each syscall
+		# hack: stdout gets clogged with the charspam, 
+		# flush it after each syscall
+		self.stdout.flush() 
 				
 	def __runDevices(self):
 		for device in self.devices_list:
@@ -161,7 +168,9 @@ class VirtualMachine(object):
 			
 	def __runInstruction(self, instruction):
 		if not hasattr(instruction, '_vm_asm'):
-			raise self.RuntimeVMException("Attempted to execute non-instruction at 0x%08X\n" % self.regBank.PC)
+			raise self.RuntimeVMException(
+				"Attempted to execute non-instruction at 0x%08X\n" % 
+				self.regBank.PC)
 			
 		instruction._vm_asm(self.regBank)
 				
@@ -174,24 +183,27 @@ class VirtualMachine(object):
 				oldPC = self.regBank.PC
 				instruction = self.memory[self.regBank.PC, 4]
 				
-				# if the instruction does have a delay, and delay slots are enabled
-				# we need to handle it...
-				if hasattr(instruction, '_delay') and instruction._delay and self.enableDelaySlot:
+				# if the instruction does have a delay, and delay slots
+				if (hasattr(instruction, '_delay') 
+					and instruction._delay 
+					and self.enableDelaySlot):
+				# are enabled, we need to handle it...
 					
-					# what we are doing is fetching the instruction AFTER the current
-					# one (the one which should go into the delay slot) and executing
-					# it first...
+					# what we are doing is fetching the instruction AFTER the 
+					# current one (the one which should go into the delay 
+					# slot) and executing it first...
 					did_delay_slot = True
 					delay_slot = self.memory[self.regBank.PC + 0x4, 4]
 					
 					if self.verboseSteps:
-						_debug('[DELAYED BR]\n' + buildLineOfCode(self.regBank.PC + 0x4, delay_slot))
+						_debug('[DELAYED BR]\n' + 
+							buildLineOfCode(self.regBank.PC + 0x4, delay_slot))
 					
 					# if an exception is raised when executing the instruction
-					# in the delay slot, we handle it like it was caused in the jump,
-					# then the handler should set the PC to execute the delay slot again
-					# hence we increase the PC to skip the delay slot, and continue 
-					# the execution.
+					# in the delay slot, we handle it like it was caused in 
+					# the jump, then the handler should set the PC to execute 
+					# the delay slot again hence we increase the PC to skip 
+					# the delay slot, and continue the execution.
 					try: self.__runInstruction(delay_slot)
 					except MIPS_Exception as cur_exception:
 						self.processException(cur_exception)
@@ -202,7 +214,9 @@ class VirtualMachine(object):
 					_debug(buildLineOfCode(self.regBank.PC, instruction))
 					
 				if self.regBank.PC in self.debugPoints or self.doStep:
-					self.currentLine = buildLineOfCode(self.regBank.PC, instruction)
+					self.currentLine = buildLineOfCode(
+						self.regBank.PC, instruction)
+						
 					pdb.set_trace()
 					
 				self.__runInstruction(instruction)
@@ -215,7 +229,8 @@ class VirtualMachine(object):
 		
 	def resume(self):
 		if not self.started or not self.breakpointed:
-			raise self.RuntimeVMException("Cannot resume execution -- execution not paused.")
+			raise self.RuntimeVMException(
+				"Cannot resume execution -- execution not paused.")
 			
 		self.breakpointed = False
 		self.running = True
@@ -225,20 +240,28 @@ class VirtualMachine(object):
 			
 	def run(self):
 		if self.started or self.breakpointed:
-			raise self.RuntimeVMException("Reset the Virtual Machine before running again the program.")
+			raise self.RuntimeVMException(
+				"Reset the Virtual Machine before running again the program.")
 			
 		if not '__start' in self.parser.global_labels:
-			raise self.RuntimeVMException("Cannot find global '__start' label.")
+			raise self.RuntimeVMException(
+				"Cannot find global '__start' label.")
 			
-		self.regBank.PC = self.parser.global_labels['__start'] # load PC with the default start
+		# load PC with the default start
+		self.regBank.PC = self.parser.global_labels['__start'] 
 		
 		if not self.runAsKernel:
-			self.regBank.CP0.Status |= 0x2 # enter user mode
+			# enter user mode
+			self.regBank.CP0.Status |= 0x2 
+		
+		# enable all interrupt masks and the global interrupt switch
+		self.regBank.CP0.Status |= 0xFF01 
 			
-		self.regBank.CP0.Status |= 0xFF01 # enable all interrupt masks and the global interrupt switch
-			
-		self.regBank.CP0.Compare = 1500 # clock ticks until next interrupt
-		self.regBank[29] = 0x80000000 - 0xC # stack pointer -- set a tad lower to fake argc and argv
+		# clock ticks until next interrupt
+		self.regBank.CP0.Compare = 1500 
+		
+		# stack pointer -- set a tad lower to fake argc and argv
+		self.regBank[29] = 0x80000000 - 0xC 
 		
 		self.started = True
 		self.running = True
@@ -254,7 +277,8 @@ class VirtualMachine(object):
 			raise self.RuntimeVMException("Unknown MIPS exception raised.")
 			
 		if self.verboseSteps:
-			_debug("[ EXCEPTION]    Raised MIPS exception '%s' (%s).\n" % (exception.code, exception.debug_msg))
+			_debug("[ EXCEPTION]    Raised MIPS exception '%s' (%s).\n" % (
+				exception.code, exception.debug_msg))
 		
 		code = self.EXCEPTIONS[exception.code]
 		
@@ -262,12 +286,18 @@ class VirtualMachine(object):
 			int_id = exception.int_id
 			
 			if not 0 <= int_id <= 5:
-				raise self.RuntimeVMException("Invalid interrupt source %d." % int_id)
+				raise self.RuntimeVMException(
+					"Invalid interrupt source %d." % int_id)
 			
-			# if the global interrupt enable is on, and the source is not masked, flag a cause bit
-			if (self.regBank.CP0.Status & 0x1) and (self.regBank.CP0.Status & (1 << (int_id + 8))):
+			# if the global interrupt enable is on, and the source is 
+			# not masked, flag a cause bit
+			if (self.regBank.CP0.Status & 0x1) and (
+				self.regBank.CP0.Status & (1 << (int_id + 8))):
+					
 				self.regBank.CP0.Cause |= (1 << (10 + int_id))
-			else: return
+			
+			else: 
+				return
 			
 		elif code == 4 or code == 5: # memory access error
 			self.regBank.CP0.BadVAddr = exception.badaddr
@@ -280,7 +310,9 @@ class VirtualMachine(object):
 				
 				if self.regBank[4]:
 					pdb.set_trace()
-					raise self.RuntimeVMException("Program terminated with error code %d" % self.regBank[4])
+					raise self.RuntimeVMException(
+						"Program terminated with error code %d" % 
+							self.regBank[4])
 				
 			elif self.virtualSyscalls:
 				self.__syscallVirtualization()
@@ -293,14 +325,20 @@ class VirtualMachine(object):
 			return
 				
 		self.regBank.CP0.Cause &= ~0x3C
-		self.regBank.CP0.Cause |= (code << 2) # set exception code in the cause register
 		
-		lowbits = self.regBank.CP0.Status & 0x3F # get the lowest 6 bits from Status
-		self.regBank.CP0.Status &= ~0x3F # ...and clear them on the register
-		self.regBank.CP0.Status |= (lowbits << 2) & 0x3F # load them back shifted, so two new zeros appear
+		# set exception code in the cause register
+		self.regBank.CP0.Cause |= (code << 2) 
+		
+		# get the lowest 6 bits from Status
+		lowbits = self.regBank.CP0.Status & 0x3F 
+		# ...and clear them on the register
+		self.regBank.CP0.Status &= ~0x3F 
+		# load them back shifted, so two new zeros appear
+		self.regBank.CP0.Status |= (lowbits << 2) & 0x3F 
 		
 		self.regBank.CP0.EPC = self.regBank.PC	# save old PC
-		self.regBank.PC = EXCEPTION_HANDLER_ADDR # ...and jump to the exception handler
+		# ...and jump to the exception handler
+		self.regBank.PC = EXCEPTION_HANDLER_ADDR 
 		
 	def getAccessMode(self):
 		return 'user' if self.regBank.CP0.getUserBit() else 'kernel'
@@ -342,19 +380,28 @@ class VirtualMachine(object):
 	
 			device_instance = device(len(self.devices_list), **device_params)
 			
-			if 	not hasattr(device_instance, 'tick') or \
-				not hasattr(device_instance, '__getitem__') or \
-				not hasattr(device_instance, '__setitem__'):
-				raise self.ConfigVMException("Device '%s' doesn't implement the standard Device Interface." % device_name)
+			if (not hasattr(device_instance, 'tick') or 
+				not hasattr(device_instance, '__getitem__') or 
+				not hasattr(device_instance, '__setitem__')):
+				raise self.ConfigVMException(
+					"Device '%s' doesn't implement the standard Device Interface." 
+						% device_name)
 			
 			if 	not hasattr(device_instance, '_memory_map'):
-				raise self.ConfigVMException("Device '%s' doesn't have memory mappings." % device_name)
+				raise self.ConfigVMException(
+					"Device '%s' doesn't have memory mappings." % device_name)
 			
 			for memory_address in device_instance._memory_map:
 				self.memory.devices_memory_map[memory_address] = device_instance
 				
-			if hasattr(device_instance, '_interrupt_handler') and hasattr(device_instance, '_interrupt_handler_label'):
-				interrupt_handlers.append((len(self.devices_list), device_instance._interrupt_handler, device_instance._interrupt_handler_label))
+			if (hasattr(device_instance, '_interrupt_handler') and 
+				hasattr(device_instance, '_interrupt_handler_label')):
+				interrupt_handlers.append(
+					(
+						len(self.devices_list), 
+						device_instance._interrupt_handler, 
+						device_instance._interrupt_handler_label
+					))
 			
 			self.devices_list.append(device_instance)
 			
@@ -364,7 +411,10 @@ class VirtualMachine(object):
 				device_scr = device_instance
 			
 		if not self.virtualSyscalls and (not device_kb or not device_scr):
-			raise self.ConfigVMException("Virtualized syscalls are disabled but there are no memory-mapped devices able to emulate their implementation.")	
+			raise self.ConfigVMException(
+				"""Virtualized syscalls are disabled but there 
+				are no memory-mapped devices able to emulate their 
+				implementation.""")	
 		
 		# assembly loading / parsing
 		if self.exceptionHandler:
@@ -373,9 +423,14 @@ class VirtualMachine(object):
 			if not self.virtualSyscalls:
 				keyboard_address = min(device_kb._memory_map)
 				screen_address = min(device_scr._memory_map)
-				ktext = getKernelText(True, True, interrupt_handlers, screen_address, keyboard_address)
+				
+				ktext = getKernelText(True, True, 
+					interrupt_handlers, 
+					screen_address, 
+					keyboard_address)
 			else:
-				ktext = getKernelText(True, False, interrupt_handlers)
+				ktext = getKernelText(True, False, 
+					interrupt_handlers)
 				
 			self.parser.parseBuffer(ktext)
 		

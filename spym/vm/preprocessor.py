@@ -41,9 +41,11 @@ class AssemblyPreprocessor(object):
 		func = 'dir_' + identifier[1:]
 		
 		if not hasattr(self, func):
-			raise self.PreprocessorException("Unknown preprocessor directive: %s" % func)
+			raise self.PreprocessorException(
+				"Unknown preprocessor directive: %s" % func)
 		
-		return getattr(self, func)(args, cur_address) or (cur_address, cur_address)
+		return 	(getattr(self, func)(args, cur_address) or
+				(cur_address, cur_address))
 		
 	def __checkArgs(self, args, _min = None, _max = None, _count = None):
 		argcount = len(args)
@@ -51,23 +53,31 @@ class AssemblyPreprocessor(object):
 		if  (_min is not None and argcount < _min) or \
 			(_max is not None and argcount > _max) or \
 			(_count is not None and argcount != _count):
-			raise self.PreprocessorException("Wrong parameter count in preprocessor directive.")
+			raise self.PreprocessorException(
+				"Wrong parameter count in preprocessor directive.")
 		
 	def __segmentChange(self, args, segment):
 		self.__checkArgs(args, _max = 1)
 		self.align = None
 		
 		if not args:
-			block_start = self.lastSegmentAddr[segment] if segment in self.lastSegmentAddr else self.memory.SEGMENT_DATA[segment][0]
+			if segment in self.lastSegmentAddr:
+				block_start = self.lastSegmentAddr[segment]
+			else:
+				block_start = self.memory.SEGMENT_DATA[segment][0]
+				
 			address = self.memory.getNextFreeBlock(block_start)
 		else:	
 			try:
 				address = int(args[0], 16)
 			except ValueError:
-				raise self.PreprocessorException("Invalid address: '%s'" % args[0])
+				raise self.PreprocessorException(
+					"Invalid address: '%s'" % args[0])
 		
 			if self.memory.getSegment(address) != segment:
-				raise self.PreprocessorException("Address %X doesn't belong to the %s segment." % (address, segment))
+				raise self.PreprocessorException(
+					"Address %X doesn't belong to the %s segment." % 
+						(address, segment))
 		
 		self.lastSegmentAddr[segment] = address
 		return (address, address)
@@ -77,7 +87,10 @@ class AssemblyPreprocessor(object):
 			raise self.PreprocessorException("Malformed string constant.")
 			
 		original_address = address
-		string = string[1:-1].replace(r'\n', '\n').replace(r'\"', '"').replace(r'\t', '\t')
+		string = string[1:-1]
+		string = string.replace(r'\n', '\n')
+		string = string.replace(r'\"', '"')
+		string = string.replace(r'\t', '\t')
 		
 		for c in string:
 			self.memory[address, 1] = ord(c) & 0xFF
@@ -112,7 +125,8 @@ class AssemblyPreprocessor(object):
 				address += size
 		
 		except ValueError:
-			raise self.PreprocessorException("Invalid integer constants for data assembly: '%s'" % d)
+			raise self.PreprocessorException(
+				"Invalid integer constants for data assembly: '%s'" % d)
 			
 		return (original_address, address)
 		
@@ -120,6 +134,7 @@ class AssemblyPreprocessor(object):
 		self.__checkArgs(args, _count = 1)
 		if args[0] == 'noat':
 			self.parser.instruction_assembler.assembly_regiser_protected = False
+			
 		elif args[0] == 'at':
 			self.parser.instruction_assembler.assembly_regiser_protected = True
 		

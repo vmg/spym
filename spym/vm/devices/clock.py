@@ -79,7 +79,9 @@ class CPUClock_TIMER(object):
 			self.clock_bit = 1
 			
 			if self.int_enable:
-				raise MIPS_Exception('INT', int_id = self.int_level, debug_msg = 'CPU clock tick!')
+				raise MIPS_Exception('INT', 
+					int_id = self.int_level, 
+					debug_msg = 'CPU clock tick!')
 			
 	def __getitem__(self, addr):
 		address, offset, size = breakAddress(addr)
@@ -112,7 +114,9 @@ class CPUClock_TICKS(object):
 			self.loop_ticks = self.loop_time
 			self.clock_bit = 1
 			if self.int_enable:
-				raise MIPS_Exception('INT', int_id = self.int_level, debug_msg = 'CPU clock tick!')
+				raise MIPS_Exception('INT', 
+					int_id = self.int_level, 
+					debug_msg = 'CPU clock tick!')
 
 			
 	def __getitem__(self, addr):

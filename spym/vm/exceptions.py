@@ -381,7 +381,12 @@ def parseInterruptHandlers(handler_list):
 	int_handler_addresses = ".word " + ", ".join(label_names)
 	return handler_text, int_handler_addresses
 
-def getKernelText(exception_handler = True, syscall_handler = True, interrupt_handlers = [], memmap_screen = 0x0, memmap_keyboard = 0x0):
+def getKernelText(exception_handler = True, 
+				syscall_handler = True, 
+				interrupt_handlers = [], 
+				memmap_screen = 0x0, 
+				memmap_keyboard = 0x0):
+				
 	kernel_text = ""
 	int_handler_addresses = ""
 	

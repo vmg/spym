@@ -39,6 +39,8 @@ class PseudoInstructionAssembler(InstructionAssembler):
 	
 	SELFASSIGN_PSEUDOINS = ['addi', 'addiu', 'andi', 'ori', 'xori']
 	STORE_PSEUDOINS = ['sb', 'sh', 'sw', 'lb', 'lbu', 'lh', 'lhu', 'lw']
+	
+	MEM_ADDRESS_REGEX = r'^(\w+)?([+-](?:0x)?[\da-fA-F]+)?(?:\((\$\w{1,2})\))?$'
 		
 	def imm_pins_TEMPLATE(self, args, imm_parameter):
 		try:
@@ -63,7 +65,7 @@ class PseudoInstructionAssembler(InstructionAssembler):
 			args[1] = "0" + mem_addr
 			return args, []
 			
-		match = re.match(r'^(\w+)?([+-](?:0x)?[\da-fA-F]+)?(?:\((\$\w{1,2})\))?$', mem_addr)
+		match = re.match(self.MEM_ADDRESS_REGEX, mem_addr)
 		
 		label_address 	= match.group(1)
 		const_immediate = match.group(2)
@@ -71,7 +73,8 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		
 		if label_address:
 			if label_address not in self.parser.local_labels:
-				raise self.InstructionAssemblerException("Cannot resolve label in load/store instruction.")
+				raise self.InstructionAssemblerException(
+					"Cannot resolve label in load/store instruction.")
 			
 			label_address = self.parser.local_labels[label_address]
 		else:
@@ -80,22 +83,30 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		const_immediate = self._parseImmediate(const_immediate) if const_immediate else 0
 		addr_register = self._parseRegister(addr_register) if addr_register else 0
 		
-		asm_output = self.pins_li(['$1', str(label_address + const_immediate)])
+		asm_output = self.pins_li(
+			['$1', str(label_address + const_immediate)]
+		)
 		
 		if addr_register:
-			asm_output.append(super(PseudoInstructionAssembler, self).__call__('add', ['$1', '$1', "$%d" % addr_register]))
+			asm_output.append(
+				super(PseudoInstructionAssembler, self).__call__('add', 
+					['$1', '$1', "$%d" % addr_register]
+				))
 
 		args[1] = "0($1)"
 		return args, asm_output
 		
 	def __checkOverrideFunctions(self, func):
-		return (func in self.IMM_PSEUDOINS) or (func in self.STORE_PSEUDOINS) or (func in self.SELFASSIGN_PSEUDOINS)
+		return 	(func in self.IMM_PSEUDOINS) or \
+				(func in self.STORE_PSEUDOINS) or \
+				(func in self.SELFASSIGN_PSEUDOINS)
 		
 	def __instructionOverride(self, func, args):
 		_asm_extra_func = []
 		
 		if func in self.IMM_PSEUDOINS:
-			args, _asm_extra_func = self.imm_pins_TEMPLATE(args, self.IMM_PSEUDOINS[func])
+			args, _asm_extra_func = self.imm_pins_TEMPLATE(
+				args, self.IMM_PSEUDOINS[func])
 		
 		elif func in self.STORE_PSEUDOINS:
 			args, _asm_extra_func = self.storeload_label_TEMPLATE(args)
@@ -113,12 +124,15 @@ class PseudoInstructionAssembler(InstructionAssembler):
 			# to the local 'pins_div', where it'll fail because of missing args
 			pass
 			
-		return _asm_extra_func + [super(PseudoInstructionAssembler, self).__call__(func, args)]
+		return _asm_extra_func + [
+			super(PseudoInstructionAssembler, self).__call__(func, args)]
 		
 		
 	def __call__(self, func, args):
 		pseudoinst_output = []
-		self.assembler_register_protected = False # disable protection in $1 to encode pseudo-instructions
+		
+		# disable protection in $1 to encode pseudo-instructions
+		self.assembler_register_protected = False 
 		
 		if self.__checkOverrideFunctions(func):
 			pseudoinst_output += self.__instructionOverride(func, args)
@@ -130,9 +144,12 @@ class PseudoInstructionAssembler(InstructionAssembler):
 			
 			pseudoinst_output += getattr(self, func)(args)
 		
-		self.assembler_register_protected = True # enable $1 protection again	
+		self.assembler_register_protected = True
+		
+		if not pseudoinst_output:
+			return super(PseudoInstructionAssembler, self).__call__(func, args)
 
-		return pseudoinst_output or super(PseudoInstructionAssembler, self).__call__(func, args)
+		return pseudoinst_output
 
 	def pins_abs(self, args): # (x ^ (x>>31)) - (x>>31)
 		"""
@@ -145,28 +162,21 @@ class PseudoInstructionAssembler(InstructionAssembler):
 			self.ins_sub([args[0], args[0], '$1'])
 		]
 		
-	# def pins_div(self, args, unsigned = False):
-	# 	"""
-	# 	Desc: Sets $d to the quotient of $s and $t, skipping the HI/LO registers.
-	# 	Syntax: div $d, $s, $t
-	# 	"""	
-	# 	args, _asm_immFunc = self.imm_pins_TEMPLATE(args, 2)
-	# 	
-	# 	return _asm_immFunc + [
-	# 		InstructionAssembler.ins_div(self, args[1:], unsigned), # do the normal division with src1 and src2
-	# 		self.ins_mflo([args[0]]),				 # move from LO to des the result	
-	# 	]
-		
 	def pins_mul(self, args, unsigned = False):
 		"""
-		Desc: Sets $d to the lesser half (32 bits) of the product of $s and $t, skipping the HI/LO registers.
+		Desc: Sets $d to the lesser half (32 bits) of the product of $s and $t, 
+			skipping the HI/LO registers.
+			
 		Syntax: mul $d, $s, $t
 		"""
 		args, _asm_immFunc = self.imm_pins_TEMPLATE(args, 2)
 		
 		return _asm_immFunc + [
-			self.ins_mult(args[1:], unsigned), # do the normal division with src1 and src2
-			self.ins_mflo([args[0]]),				 # move from LO to des the result	
+			# do the normal division with src1 and src2
+			self.ins_mult(args[1:], unsigned), 
+			
+			# move from LO to des the result
+			self.ins_mflo([args[0]]),
 		]
 		
 	def pins_neg(self, args):
@@ -178,7 +188,9 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		
 	def pins_negu(self, args):
 		"""
-		Desc: Sets $d to the arithmetical negative of $s, assuming $s is positive.
+		Desc: Sets $d to the arithmetical negative of $s, 
+			assuming $s is positive.
+			
 		Syntax: negu $d, $s
 		"""
 		return [self.ins_sub([args[0], '$0', args[1]], True)]
@@ -281,7 +293,8 @@ class PseudoInstructionAssembler(InstructionAssembler):
 		Syntax: la $d, label
 		"""		
 		if args[1] not in self.parser.local_labels:
-			raise self.InstructionAssemblerException("Cannot resolve label in LA (load address) instruction.")
+			raise self.InstructionAssemblerException(
+				"Cannot resolve label in LA (load address) instruction.")
 
 		args[1] = str(self.parser.local_labels[args[1]])
 		return self.pins_li(args)
