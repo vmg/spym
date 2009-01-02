@@ -241,7 +241,7 @@ class InstructionAssembler(object):
 			new_instruction = self.encoder(instruction._vm_asm, func_name, 
 				s = data[3], 
 				t = data[4], 
-				imm = immediate_encoding
+				imm = immediate_encoding,
 				label = label,
 				label_address = label_address)
 		

@@ -117,7 +117,7 @@ class AssemblyParser(object):
 					
 			except (self.ParserException, 
 					AssemblyPreprocessor.PreprocessorException, 
-					InstructionAssembler.InstructionAssemblerException) 
+					InstructionAssembler.InstructionAssemblerException) \
 					as parsing_exception:
 					
 				raise self.ParsingFailed("\nLINE %d:\t%s\n  %s" % (
