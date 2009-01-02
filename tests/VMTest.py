@@ -36,7 +36,7 @@ class GlobalASMTests(unittest.TestCase):
 			virtualSyscalls = False, 
 			loadAsBuffer = lab, 
 			enablePseudoInsts = True, 
-			verboseSteps = True, 
+			verboseSteps = False, 
 			runAsKernel = False,
 			debugPoints = [])
 		vm.run()

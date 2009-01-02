@@ -23,15 +23,13 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
 
+import sys
 from spym.common.utils import *
 
-# ugly monkeypatching.
-class MemoryInstruction(long):
-	def __init__(self, number):
-		self._vm_asm = None
-		self.text = ''
-		self.orig_text = ''
-		self._delay = False
+if (sys.version_info) >= (3, 0):	
+	from spym.common.meminst_30 import MemoryInstruction
+else:
+	from spym.common.meminst_26 import MemoryInstruction								
 
 class InstructionEncoder(object):	
 	class EncodingError(Exception):
