@@ -56,102 +56,102 @@ class TerminalFile:
         return c
 
 class TerminalScreen(object):
-	MAP_CTRL = 0xFFFF0008
-	MAP_DATA = 0xFFFF000C
-	
-	_memory_map = (MAP_CTRL, MAP_DATA)
-	
-	SCREEN_WRITE_DELAY = 5
-	
-	def __init__(self, interrupt_level, stdout = None, delayed_io = True):
-		self.control_register = 0x00000001
-		self.data_register = 0x0
-		self.delayed_io = delayed_io
-		self.interrupt_level = interrupt_level
-		self.delay_count = 0
-		
-		self.stdout = stdout or sys.stdout
-		
-	def printCharacter(self):
-		self.stdout.write(chr(self.data_register))
-		self.control_register |= 0x1
-		
-		if self.control_register & 0x2:
-			raise MIPS_Exception('INT', int_id = self.interrupt_level)
+    MAP_CTRL = 0xFFFF0008
+    MAP_DATA = 0xFFFF000C
+    
+    _memory_map = (MAP_CTRL, MAP_DATA)
+    
+    SCREEN_WRITE_DELAY = 5
+    
+    def __init__(self, interrupt_level, stdout = None, delayed_io = True):
+        self.control_register = 0x00000001
+        self.data_register = 0x0
+        self.delayed_io = delayed_io
+        self.interrupt_level = interrupt_level
+        self.delay_count = 0
+        
+        self.stdout = stdout or sys.stdout
+        
+    def printCharacter(self):
+        self.stdout.write(chr(self.data_register))
+        self.control_register |= 0x1
+        
+        if self.control_register & 0x2:
+            raise MIPS_Exception('INT', int_id = self.interrupt_level)
 
-	def tick(self):
-		if self.delayed_io and (self.control_register & 0x1) == 0:
-			self.delay_count = self.delay_count - 1
-			if self.delay_count == 0:
-				self.printCharacter()
-		
-	def __setitem__(self, addr, data):
-		address, offset, size = breakAddress(addr)
-		
-		if offset: return
-		
-		if address == self.MAP_DATA and self.control_register & 0x1: # ready?
-			self.data_register = data & 0xFF
-			
-			if self.delayed_io:
-				self.control_register &= ~0x1
-				self.delay_count = self.SCREEN_WRITE_DELAY
-			else:
-				self.printCharacter()
-				
-		elif address == self.MAP_CTRL:
-			self.control_register &= ~0x2
-			self.control_register |= data & 0x2
-		
-	def __getitem__(self, addr):
-		address, offset, size = breakAddress(addr)
-		
-		if offset: return 0x0
-		
-		if address == self.MAP_DATA:
-			return self.data_register & 0xFF
-		elif address == self.MAP_CTRL:
-			return self.control_register & 0xFF
-		
+    def tick(self):
+        if self.delayed_io and (self.control_register & 0x1) == 0:
+            self.delay_count = self.delay_count - 1
+            if self.delay_count == 0:
+                self.printCharacter()
+        
+    def __setitem__(self, addr, data):
+        address, offset, size = breakAddress(addr)
+        
+        if offset: return
+        
+        if address == self.MAP_DATA and self.control_register & 0x1: # ready?
+            self.data_register = data & 0xFF
+            
+            if self.delayed_io:
+                self.control_register &= ~0x1
+                self.delay_count = self.SCREEN_WRITE_DELAY
+            else:
+                self.printCharacter()
+                
+        elif address == self.MAP_CTRL:
+            self.control_register &= ~0x2
+            self.control_register |= data & 0x2
+        
+    def __getitem__(self, addr):
+        address, offset, size = breakAddress(addr)
+        
+        if offset: return 0x0
+        
+        if address == self.MAP_DATA:
+            return self.data_register & 0xFF
+        elif address == self.MAP_CTRL:
+            return self.control_register & 0xFF
+        
 class TerminalKeyboard(object):
-	MAP_DATA = 0xFFFF0004
-	MAP_CTRL = 0xFFFF0000
-	
-	_memory_map = (MAP_CTRL, MAP_DATA)
-	
-	def __init__(self, interrupt_level, stdin = None):
-		self.interrupt_level = interrupt_level
-		self.control_register = 0x0
-		self.data_register = 0x0
-		
-#		self.terminal_io = TerminalFile(sys.stdin)
-		
-	def tick(self):
-		pass
-		# pass
-		# char_in = self.terminal_io.getch()
-		# 
-		# if char_in:
-		# 	self.data_register = ord(char_in)
-		# 	self.control_register |= 0x1
-		# 	
-		# 	if self.control_register & 0x2:
-		# 		raise MIPS_Exception('INT', int_id = self.interrupt_level)
-		
-	def __setitem__(self, addr, data):
-		address, offset, size = breakAddress(addr)
-		
-		if offset == 0 and address == self.MAP_CTRL:
-			self.control_register &= ~0x2
-			self.control_register |= data & 0x2
-		
-	def __getitem__(self, addr):
-		address, offset, size = breakAddress(addr)
-		if offset: return 0x0
-		
-		if address == self.MAP_DATA:
-			self.control_register &= ~0x1
-			return self.data_register & 0xFF
-		
-		elif address == self.MAP_CTRL:
-			return self.control_register & 0xFF
+    MAP_DATA = 0xFFFF0004
+    MAP_CTRL = 0xFFFF0000
+    
+    _memory_map = (MAP_CTRL, MAP_DATA)
+    
+    def __init__(self, interrupt_level, stdin = None):
+        self.interrupt_level = interrupt_level
+        self.control_register = 0x0
+        self.data_register = 0x0
+        
+#       self.terminal_io = TerminalFile(sys.stdin)
+        
+    def tick(self):
+        pass
+        # pass
+        # char_in = self.terminal_io.getch()
+        # 
+        # if char_in:
+        #   self.data_register = ord(char_in)
+        #   self.control_register |= 0x1
+        #   
+        #   if self.control_register & 0x2:
+        #       raise MIPS_Exception('INT', int_id = self.interrupt_level)
+        
+    def __setitem__(self, addr, data):
+        address, offset, size = breakAddress(addr)
+        
+        if offset == 0 and address == self.MAP_CTRL:
+            self.control_register &= ~0x2
+            self.control_register |= data & 0x2
+        
+    def __getitem__(self, addr):
+        address, offset, size = breakAddress(addr)
+        if offset: return 0x0
+        
+        if address == self.MAP_DATA:
+            self.control_register &= ~0x1
+            return self.data_register & 0xFF
+        
+        elif address == self.MAP_CTRL:
+            return self.control_register & 0xFF

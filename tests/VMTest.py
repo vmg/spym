@@ -24,54 +24,53 @@ OTHER DEALINGS IN THE SOFTWARE.
 """""
 
 import unittest
-import testcommon
 
 from spym.vm.core import VirtualMachine
 from spym.vm.devices import TerminalKeyboard, TerminalScreen
 
 class GlobalASMTests(unittest.TestCase):
-	def _runTest(self, asm, lab = True):
-		vm = VirtualMachine(asm, 
-			defaultMemoryMappedIO = True, 
-			virtualSyscalls = False, 
-			loadAsBuffer = lab, 
-			enablePseudoInsts = True, 
-			verboseSteps = False, 
-			runAsKernel = False,
-			debugPoints = [])
-		vm.run()
-		vm.debugPrintAll()
-		
-	def XXXtestASM2(self):
-		self._runTest('testprogram.s', False)
-		
-	def testASM1(self):
-		self._runTest(
+    def _runTest(self, asm, lab = True):
+        vm = VirtualMachine(asm, 
+            defaultMemoryMappedIO = True, 
+            virtualSyscalls = False, 
+            loadAsBuffer = lab, 
+            enablePseudoInsts = True, 
+            verboseSteps = False, 
+            runAsKernel = False,
+            debugPoints = [])
+        vm.run()
+        vm.debugPrintAll()
+        
+    def XXXtestASM2(self):
+        self._runTest('testprogram.s', False)
+        
+    def testASM1(self):
+        self._runTest(
 r"""
 .data
 bdata: 
-	.word 0xAA, 0xBBBB, 0xCCCCCC, 0xDDDDDDDD
+    .word 0xAA, 0xBBBB, 0xCCCCCC, 0xDDDDDDDD
 
 tick_string:
-	.asciiz "WE TICKED!\n"
-	
+    .asciiz "WE TICKED!\n"
+    
 .data 0x10040020
-	.space 128
-	
-	.globl main
+    .space 128
+    
+    .globl main
 
 .text
 main:
 
 clock_wait:
-	nop
-	nop
-	nop
-	j clock_wait
+    nop
+    nop
+    nop
+    j clock_wait
 
 tlabel:
-	jr $ra
+    jr $ra
 """)
 
 if __name__ == '__main__':
-	unittest.main()
+    unittest.main()

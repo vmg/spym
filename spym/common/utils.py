@@ -25,41 +25,41 @@ OTHER DEALINGS IN THE SOFTWARE.
 import sys
 
 def u32(i):
-	return i & 0xFFFFFFFF
-	
+    return i & 0xFFFFFFFF
+    
 def u16(i):
-	return i & 0xFFFF
-	
+    return i & 0xFFFF
+    
 def u8(i):
-	return i & 0xFF
+    return i & 0xFF
 
 def s32(i):
-	return (i + (1 << 31)) % (1 << 32) - (1 << 31)
+    return (i + (1 << 31)) % (1 << 32) - (1 << 31)
 
 def s16(i):
-	return (i + (1 << 15)) % (1 << 16) - (1 << 15)	
-	
+    return (i + (1 << 15)) % (1 << 16) - (1 << 15)  
+    
 def s8(i):
-	return (i + (1 << 7)) % (1 << 8) - (1 << 7)
-	
+    return (i + (1 << 7)) % (1 << 8) - (1 << 7)
+    
 def extsgn(i, size):
-	size = (size * 8) - 1
-	return (i + (1 << size)) % (1 << (size + 1)) - (1 << size)
-	
-def getFromWord(word_register, offset, size = 4):	
-	offset = offset * 8
-	mask = (1 << (size * 8)) - 1
-	return (word_register >> offset) & mask
-	
+    size = (size * 8) - 1
+    return (i + (1 << size)) % (1 << (size + 1)) - (1 << size)
+    
+def getFromWord(word_register, offset, size = 4):   
+    offset = offset * 8
+    mask = (1 << (size * 8)) - 1
+    return (word_register >> offset) & mask
+    
 def breakAddress(address):
-	size = 4
-	if isinstance(address, tuple):
-		address, size = address
-	
-	offset = address & 0x3
-	address = address & ~0x3
-	
-	return (address, offset, size)
+    size = 4
+    if isinstance(address, tuple):
+        address, size = address
+    
+    offset = address & 0x3
+    address = address & ~0x3
+    
+    return (address, offset, size)
 
 def bin(n, count=24):
     """returns the binary of integer n, using count number of digits"""
@@ -78,21 +78,21 @@ def bindump(src, offset = 0, length = 16):
     return result
 
 def _debug(msg):
-	sys.stderr.write(msg)
+    sys.stderr.write(msg)
 
 def buildLineOfCode(address, instruction):
-	RIGHT_MARGIN = 55
-	if not hasattr(instruction, '_vm_asm'):
-		return ''
-		
-	output = "[0x%08X]    0x%08X  %s" % (address, instruction, instruction.text)
-	output = output.ljust(RIGHT_MARGIN) + "; "
-	text, comment = instruction.orig_text, ""
-	
-	if '#' in instruction.orig_text:
-		text, comment = text.split('#', 1)
-		comment = ' # ' + comment.strip()
+    RIGHT_MARGIN = 55
+    if not hasattr(instruction, '_vm_asm'):
+        return ''
+        
+    output = "[0x%08X]    0x%08X  %s" % (address, instruction, instruction.text)
+    output = output.ljust(RIGHT_MARGIN) + "; "
+    text, comment = instruction.orig_text, ""
+    
+    if '#' in instruction.orig_text:
+        text, comment = text.split('#', 1)
+        comment = ' # ' + comment.strip()
 
-	output += text.strip().ljust(30) + comment
-	
-	return output + '\n'
+    output += text.strip().ljust(30) + comment
+    
+    return output + '\n'
