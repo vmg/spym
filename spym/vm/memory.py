@@ -32,7 +32,7 @@ class MemoryManager(object):
     MIN_ADDRESS =       0x00000000
     MAX_ADDRESS =       0xFFFFFFFF
     
-    def __init__(self, vm_ptr, L1_cache_CFG = {}, L2_cache_CFG = {}):
+    def __init__(self, vm_ptr, block_size, L1_cache_CFG = {}, L2_cache_CFG = {}):
         self.vm = vm_ptr
         self.main_memory = MainMemory(vm_ptr, 32) # default block size, 8 words
         self.devices_memory_map = {}
@@ -54,13 +54,15 @@ class MemoryManager(object):
             
         if L2_data_CFG:
             L2_data_cache = MIPSCache_TEMPLATE(
-                'LVL2 CACHE', 
+                'LVL2 CACHE',
+                block_size,
                 self.main_memory, 
                 **L2_data_CFG)
         
         if L2_code_CFG:
             L2_code_cache = MIPSCache_TEMPLATE(
-                'LVL2 CACHE', 
+                'LVL2 CACHE',
+                block_size,
                 self.main_memory, 
                 **L2_code_CFG)
             
@@ -76,12 +78,14 @@ class MemoryManager(object):
         if L1_data_CFG:
             L1_data_cache = MIPSCache_TEMPLATE(
                 'DATA CACHE', 
+                block_size,
                 L2_data_cache or self.main_memory, 
                 **L1_data_CFG)
             
         if L1_code_CFG:
             L1_code_cache = MIPSCache_TEMPLATE(
-                'CODE CACHE', 
+                'CODE CACHE',
+                block_size,
                 L2_code_cache or self.main_memory, 
                 **L1_code_CFG)
             

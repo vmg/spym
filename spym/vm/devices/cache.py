@@ -356,11 +356,16 @@ NOTE ON CACHE MODES:
         self.setData(address, size, data)       
         
 class MIPSCache_TEMPLATE(BaseCache):
-    def __init__(self, cacheName, memory_ptr, cacheMapping, numberOfLines, 
-                sizeOfWay = None, 
-                writePolicy_hit = 'write-back', 
-                writePolicy_miss = 'write-allocate', 
-                replacementPolicy = 'FIFO'):
+    def __init__(self,
+                 cacheName,
+                 block_size,
+                 memory_ptr,
+                 cacheMapping,
+                 numberOfLines, 
+                 sizeOfWay = None, 
+                 writePolicy_hit = 'write-back', 
+                 writePolicy_miss = 'write-allocate', 
+                 replacementPolicy = 'FIFO'):
                 
         if cacheMapping is 'direct':
             sizeOfWay = 1
@@ -368,7 +373,7 @@ class MIPSCache_TEMPLATE(BaseCache):
             sizeOfWay = numberOfLines
             
         BaseCache.__init__(self, 
-            cacheName, memory_ptr, 16, 
-            numberOfLines, numberOfLines, 
+            cacheName, memory_ptr, block_size, 
+            sizeOfWay, numberOfLines, 
             writePolicy_hit, writePolicy_miss, 
             replacementPolicy)

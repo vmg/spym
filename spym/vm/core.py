@@ -51,24 +51,39 @@ class VirtualMachine(object):
         'CU'    : 11,   # coprocessor disabled
         'OVF'   : 12,   # overflow
     }
+
+    DEFAULT_CACHE_CFG = (
+        {   # LEVEL 1 Data Cache    
+            'cacheMapping' : 'direct',
+            'numberOfLines' : 1024, # 1024 lines = 32KB of data
+            },
+        {   # LEVEL 1 Code Cache    
+            'cacheMapping' : 'direct',
+            'numberOfLines' : 2048, # 2048 lines = 64KB of code
+            },
+        )    
     
     class RuntimeVMException(Exception): pass
     class ConfigVMException(Exception): pass
     
-    def __init__(self, assembly, 
-                    runAsKernel = False,
-                    defaultMemoryMappedIO = False,
-                    memoryMappedDevices = {},
-                    virtualSyscalls = True,
-                    exceptionHandler = None, 
-                    loadAsBuffer = False, 
-                    enablePseudoInsts = True, 
-                    memoryBlockSize = 32, 
-                    verboseSteps = False,
-                    debugPoints = [],
-                    standardInput = None,
-                    standardOutput = None,
-                    enableDelaySlot = True):
+    def __init__(self,
+                 assembly, 
+                 runAsKernel = False,
+                 defaultMemoryMappedIO = False,
+                 memoryMappedDevices = {},
+                 virtualSyscalls = True,
+                 exceptionHandler = None, 
+                 loadAsBuffer = False, 
+                 enablePseudoInsts = True, 
+                 memoryBlockSize = 32, 
+                 verboseSteps = False,
+                 debugPoints = [],
+                 standardInput = None,
+                 standardOutput = None,
+                 enableDelaySlot = True,
+                 useDefaultCacheCfg = True,
+                 cacheLevel1 = {},
+                 cacheLevel2 = {}):
                     
         self.enablePseudoInsts = enablePseudoInsts
         self.memoryBlockSize = memoryBlockSize
@@ -86,6 +101,13 @@ class VirtualMachine(object):
         self.breakpointed = False
         self.started = False
         self.doStep = False
+
+        if useDefaultCacheCfg:
+            self.cacheLevel1 = self.DEFAULT_CACHE_CFG
+            self.cacheLevel2 = {}
+        else:
+            self.cacheLevel1 = cacheLevel1
+            self.cacheLevel2 = cacheLevel2
         
         self.stdout = standardOutput or sys.stdout
         self.stdin = standardInput or sys.stdin
@@ -346,19 +368,7 @@ class VirtualMachine(object):
     def __initialize(self):
         # core elements
         from spym.vm.memory import MemoryManager
-        
-        cache_data = (
-            {   # LEVEL 1 Data Cache    
-                'cacheMapping' : 'direct',
-                'numberOfLines' : 8, # 1024 lines = 32KB of data
-            },
-            {   # LEVEL 1 Code Cache    
-                'cacheMapping' : 'direct',
-                'numberOfLines' : 2048, # 2048 lines = 64KB of code
-            },
-        )
-        
-        self.memory = MemoryManager(self, cache_data)
+        self.memory = MemoryManager(self, self.memoryBlockSize, self.cacheLevel1, self.cacheLevel2)
         
         from spym.vm.assembler import AssemblyParser
         self.parser = AssemblyParser(self.memory, self.enablePseudoInsts)
