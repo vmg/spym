@@ -51,7 +51,8 @@ class AssemblyParser(object):
             
         self.global_labels = {}
         self.labels = {}
-        
+        self.global_variables = {}
+
         self.parsedFiles = 0
         
     def __checkLabel(self, label):
@@ -105,7 +106,7 @@ class AssemblyParser(object):
                         if not isinstance(inst_code, list):
                             inst_code = [inst_code, ]
 
-                        setattr(inst_code[0], 'orig_text', 
+                        setattr(inst_code[0], 'orig_text',
                             "%03d:  %s" % (line_no, line.strip()))
                     
                         for inst in inst_code:
@@ -115,8 +116,8 @@ class AssemblyParser(object):
                             self.memory[self.cur_address, 4] = inst
                             self.cur_address += 0x4
                     
-            except (self.ParserException, 
-                    AssemblyPreprocessor.PreprocessorException, 
+            except (self.ParserException,
+                    AssemblyPreprocessor.PreprocessorException,
                     InstructionAssembler.InstructionAssemblerException) \
                     as parsing_exception:
                     
@@ -128,8 +129,8 @@ class AssemblyParser(object):
         for inst_address in local_instructions:
             self.memory[inst_address, 4] = \
                 self.instruction_assembler.resolveLabels(
-                    self.memory[inst_address, 4], 
-                    inst_address, 
+                    self.memory[inst_address, 4],
+                    inst_address,
                     self.local_labels)
         
         for (label, address) in self.global_labels.items():
@@ -145,8 +146,8 @@ class AssemblyParser(object):
             if hasattr(instruction, '_inst_bld_tmp'):
                 
                 new_instruction = self.instruction_assembler.resolveLabels(
-                    instruction, 
-                    inst_address, 
+                    instruction,
+                    inst_address,
                     self.global_labels)
                 
                 if hasattr(new_instruction, '_inst_bld_tmp'):
@@ -163,11 +164,16 @@ class AssemblyParser(object):
         
         line = line.split('#', 1)[0].strip()
         
+        assign_re = re.match(r'(\w+)\s*=\s*(0x\d+|\d+)', line)
+        if assign_re:
+            self.global_variables[assign_re.group(1)] = int(assign_re.group(2), 0)
+            return (None, None, None)
+        
         if ':' in line:
             line_label, line = line.split(':', 1)
             line_label = line_label.strip()
             line = line.strip()
-        
+
         line_tokens = line.split(None, 1)
         
         if line_tokens:
@@ -177,7 +183,6 @@ class AssemblyParser(object):
                 if line_id == '.ascii' or line_id == '.asciiz':
                     line_args = [line_tokens[1].strip(), ]
                 else:
-                    #line_args = map(str.strip, line_tokens[1].split(','))
                     line_args = re.split(self.TOKENIZER_REGEX, line_tokens[1])
         
         return (line_label, line_id, line_args)

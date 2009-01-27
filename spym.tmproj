@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>currentDocument</key>
-	<string>spym/vm/instructions.py</string>
+	<string>spym/vm/devices/clock.py</string>
 	<key>documents</key>
 	<array>
 		<dict>
@@ -196,30 +196,14 @@
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>0</integer>
+				<integer>11</integer>
 				<key>line</key>
-				<integer>24</integer>
+				<integer>25</integer>
 			</dict>
-			<key>columnSelection</key>
-			<false/>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>4</integer>
-			<key>selectFrom</key>
-			<dict>
-				<key>column</key>
-				<integer>0</integer>
-				<key>line</key>
-				<integer>0</integer>
-			</dict>
-			<key>selectTo</key>
-			<dict>
-				<key>column</key>
-				<integer>0</integer>
-				<key>line</key>
-				<integer>24</integer>
-			</dict>
+			<integer>0</integer>
 		</dict>
 		<key>spym/vm/devices/terminal.py</key>
 		<dict>
@@ -254,14 +238,14 @@
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>0</integer>
+				<integer>27</integer>
 				<key>line</key>
-				<integer>0</integer>
+				<integer>185</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>219</integer>
+			<integer>846</integer>
 		</dict>
 		<key>spym/vm/memory.py</key>
 		<dict>
@@ -380,14 +364,14 @@
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>0</integer>
+				<integer>16</integer>
 				<key>line</key>
-				<integer>0</integer>
+				<integer>56</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>0</integer>
+			<integer>28</integer>
 		</dict>
 		<key>tests/testcommon.py</key>
 		<dict>
@@ -468,6 +452,6 @@
 		</dict>
 	</dict>
 	<key>windowFrame</key>
-	<string>{{40, 56}, {1074, 913}}</string>
+	<string>{{40, 4}, {1074, 874}}</string>
 </dict>
 </plist>

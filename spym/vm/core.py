@@ -25,7 +25,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 import os.path, time, sys, pdb
 
-from spym.vm.exceptions import * #EXCEPTION_HANDLER, EXCEPTION_HANDLER_ADDR, MIPS_Exception
+from spym.vm.exceptions import *
 from spym.common.utils import _debug, buildLineOfCode, bin
 
 class VirtualMachine(object):
@@ -61,21 +61,20 @@ class VirtualMachine(object):
             'cacheMapping' : 'direct',
             'numberOfLines' : 2048, # 2048 lines = 64KB of code
             },
-        )    
+        )
     
     class RuntimeVMException(Exception): pass
     class ConfigVMException(Exception): pass
     
     def __init__(self,
-                 assembly, 
-                 runAsKernel = False,
+                 assembly,
                  defaultMemoryMappedIO = False,
                  memoryMappedDevices = {},
                  virtualSyscalls = True,
-                 exceptionHandler = None, 
-                 loadAsBuffer = False, 
-                 enablePseudoInsts = True, 
-                 memoryBlockSize = 32, 
+                 enableExceptions = False,
+                 loadAsBuffer = False,
+                 enablePseudoInsts = True,
+                 memoryBlockSize = 32,
                  verboseSteps = False,
                  debugPoints = [],
                  standardInput = None,
@@ -89,19 +88,20 @@ class VirtualMachine(object):
         self.memoryBlockSize = memoryBlockSize
         self.assembly = assembly
         self.loadAsBuffer = loadAsBuffer
-        self.exceptionHandler = exceptionHandler
         self.verboseSteps = verboseSteps
         self.deviceInformation = memoryMappedDevices
-        self.runAsKernel = runAsKernel
         self.virtualSyscalls = virtualSyscalls
         self.defaultMemoryMappedIO = defaultMemoryMappedIO
         self.debugPoints = debugPoints
         self.enableDelaySlot = enableDelaySlot
-        
+        self.enableExceptions = enableExceptions
+
         self.breakpointed = False
         self.started = False
         self.doStep = False
-
+        self.currentLine = None
+        self.running = False
+        
         if useDefaultCacheCfg:
             self.cacheLevel1 = self.DEFAULT_CACHE_CFG
             self.cacheLevel2 = {}
@@ -113,7 +113,7 @@ class VirtualMachine(object):
         self.stdin = standardInput or sys.stdin
         
         if defaultMemoryMappedIO:
-            from spym.vm.devices import TerminalScreen, TerminalKeyboard 
+            from spym.vm.devices import TerminalScreen, TerminalKeyboard
             self.deviceInformation[self.SCREEN] = TerminalScreen
             self.deviceInformation[self.KEYBOARD] = TerminalKeyboard
             
@@ -125,12 +125,6 @@ class VirtualMachine(object):
             raise self.ConfigVMException(
                 "Cannot virtualize I/O syscalls when memory mapped I/O\
                  is enabled.")
-        
-        if not loadAsBuffer and not os.path.isfile(assembly):
-            raise self.ConfigVMException("Invalid assembly file.")
-        
-        if exceptionHandler and not os.path.isfile(exceptionHandler):
-            raise self.ConfigVMException("Invalid exception/trap file.")
         
         self.__initialize()
         
@@ -198,7 +192,7 @@ class VirtualMachine(object):
                 
     def __vm_loop(self):
         while self.running:
-            try:                
+            try:
                 self.__runDevices()
 
                 did_delay_slot = False
@@ -206,8 +200,8 @@ class VirtualMachine(object):
                 instruction = self.memory[self.regBank.PC, 4]
                 
                 # if the instruction does have a delay, and delay slots
-                if (hasattr(instruction, '_delay') 
-                    and instruction._delay 
+                if (hasattr(instruction, '_delay')
+                    and instruction._delay
                     and self.enableDelaySlot):
                 # are enabled, we need to handle it...
                     
@@ -218,7 +212,7 @@ class VirtualMachine(object):
                     delay_slot = self.memory[self.regBank.PC + 0x4, 4]
                     
                     if self.verboseSteps:
-                        _debug('[DELAYED BR]\n' + 
+                        _debug('[DELAYED BR]\n' +
                             buildLineOfCode(self.regBank.PC + 0x4, delay_slot))
                     
                     # if an exception is raised when executing the instruction
@@ -271,14 +265,7 @@ class VirtualMachine(object):
             
         # load PC with the default start
         self.regBank.PC = self.parser.global_labels['__start'] 
-        
-        if not self.runAsKernel:
-            # enter user mode
-            self.regBank.CP0.Status |= 0x2 
-        
-        # enable all interrupt masks and the global interrupt switch
-        self.regBank.CP0.Status |= 0xFF01 
-            
+           
         # clock ticks until next interrupt
         self.regBank.CP0.Compare = 1500 
         
@@ -315,10 +302,9 @@ class VirtualMachine(object):
             # not masked, flag a cause bit
             if (self.regBank.CP0.Status & 0x1) and (
                 self.regBank.CP0.Status & (1 << (int_id + 8))):
-                    
                 self.regBank.CP0.Cause |= (1 << (10 + int_id))
             
-            else: 
+            else:
                 return
             
         elif code == 4 or code == 5: # memory access error
@@ -333,7 +319,7 @@ class VirtualMachine(object):
                 if self.regBank[4]:
                     pdb.set_trace()
                     raise self.RuntimeVMException(
-                        "Program terminated with error code %d" % 
+                        "Program terminated with error code %d" %
                             self.regBank[4])
                 
             elif self.virtualSyscalls:
@@ -349,7 +335,7 @@ class VirtualMachine(object):
         self.regBank.CP0.Cause &= ~0x3C
         
         # set exception code in the cause register
-        self.regBank.CP0.Cause |= (code << 2) 
+        self.regBank.CP0.Cause |= (code << 2)
         
         # get the lowest 6 bits from Status
         lowbits = self.regBank.CP0.Status & 0x3F 
@@ -360,7 +346,7 @@ class VirtualMachine(object):
         
         self.regBank.CP0.EPC = self.regBank.PC  # save old PC
         # ...and jump to the exception handler
-        self.regBank.PC = EXCEPTION_HANDLER_ADDR 
+        self.regBank.PC = EXCEPTION_HANDLER_ADDR
         
     def getAccessMode(self):
         return 'user' if self.regBank.CP0.getUserBit() else 'kernel'
@@ -373,7 +359,7 @@ class VirtualMachine(object):
         from spym.vm.assembler import AssemblyParser
         self.parser = AssemblyParser(self.memory, self.enablePseudoInsts)
 
-        from spym.vm.regbank import RegisterBank        
+        from spym.vm.regbank import RegisterBank
         self.regBank = RegisterBank(self.memory)
         
         # device initialization
@@ -424,22 +410,20 @@ class VirtualMachine(object):
             raise self.ConfigVMException(
                 """Virtualized syscalls are disabled but there 
                 are no memory-mapped devices able to emulate their 
-                implementation.""") 
+                implementation.""")
         
         # assembly loading / parsing
-        if self.exceptionHandler:
-            self.parser.parseFile(self.exceptionHandler)
-        else:
+        if self.enableExceptions:
             if not self.virtualSyscalls:
                 keyboard_address = min(device_kb._memory_map)
                 screen_address = min(device_scr._memory_map)
                 
-                ktext = getKernelText(True, True, 
-                    interrupt_handlers, 
-                    screen_address, 
+                ktext = getKernelText(True, True,
+                    interrupt_handlers,
+                    screen_address,
                     keyboard_address)
             else:
-                ktext = getKernelText(True, False, 
+                ktext = getKernelText(True, False,
                     interrupt_handlers)
                 
             self.parser.parseBuffer(ktext)
@@ -447,7 +431,8 @@ class VirtualMachine(object):
         if self.loadAsBuffer:
             self.parser.parseBuffer(self.assembly)
         else:
-            self.parser.parseFile(self.assembly)
+			for asm in self.assembly:
+				self.parser.parseFile(asm)
         
         self.parser.resolveGlobalDependencies()
         

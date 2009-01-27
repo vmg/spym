@@ -30,7 +30,7 @@ from spym.common.utils import _debug, u32, s32, extsgn
 
 class InstructionAssembler(object):
     
-    SYNTAX_DATA = {            
+    SYNTAX_DATA = {
         'arithlog'  :   ('R', "$d, $s, $t"  ),
         'divmult'   :   ('R', "$s, $t"      ),
         'shift'     :   ('R', "$d, $t, shift"),
@@ -75,12 +75,12 @@ class InstructionAssembler(object):
                 
                 if not func.__doc__:
                     raise self.SyntaxException(
-                        "Missing syntax data for instruction '%s'." % 
+                        "Missing syntax data for instruction '%s'." %
                             func_name)
                 
                 self.asm_metadata[attr] = self.__parseSyntaxData(
-                    func_name, 
-                    func.__doc__, 
+                    func_name,
+                    func.__doc__,
                     (func_type == 'pins'))
         
     def __parseSyntaxData(self, func_name, docstring, pseudo):
@@ -168,7 +168,10 @@ class InstructionAssembler(object):
     def _parseImmediate(self, imm):
         if len(imm) == 3 and imm[0] == "'" and imm[2] == "'":
             return ord(imm[1])
-            
+
+        if imm in self.parser.global_variables:
+            return self.parser.global_variables[imm]
+
         try:
             imm = int(imm, 0)
         except (ValueError, TypeError):

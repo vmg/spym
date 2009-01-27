@@ -26,7 +26,7 @@ from spym.common.utils import buildLineOfCode
 from spym.vm.exceptions import MIPS_Exception
 from spym.vm.devices.cache import MIPSCache_TEMPLATE
 
-class MemoryManager(object):    
+class MemoryManager(object):
     USER_READ_SPACE     = (0x00400000, 0x7FFFFFFF)
     USER_WRITE_SPACE    = (0x10000000, 0x7FFFFFFF)
     MIN_ADDRESS =       0x00000000
@@ -42,28 +42,28 @@ class MemoryManager(object):
         L2_data_cache = None
         L2_code_cache = None
         
-        if isinstance(L1_cache_CFG, tuple): 
+        if isinstance(L1_cache_CFG, tuple):
             L1_data_CFG, L1_code_CFG = L1_cache_CFG
-        else:                               
+        else:
             L1_data_CFG, L1_code_CFG = L1_cache_CFG, None
         
-        if isinstance(L2_cache_CFG, tuple): 
+        if isinstance(L2_cache_CFG, tuple):
             L2_data_CFG, L2_code_CFG = L2_cache_CFG
-        else:                               
+        else:
             L2_data_CFG, L2_code_CFG = L2_cache_CFG, None
             
         if L2_data_CFG:
             L2_data_cache = MIPSCache_TEMPLATE(
                 'LVL2 CACHE',
                 block_size,
-                self.main_memory, 
+                self.main_memory,
                 **L2_data_CFG)
         
         if L2_code_CFG:
             L2_code_cache = MIPSCache_TEMPLATE(
                 'LVL2 CACHE',
                 block_size,
-                self.main_memory, 
+                self.main_memory,
                 **L2_code_CFG)
             
         L2_code_cache = L2_code_cache or L2_data_cache
@@ -77,16 +77,16 @@ class MemoryManager(object):
             
         if L1_data_CFG:
             L1_data_cache = MIPSCache_TEMPLATE(
-                'DATA CACHE', 
+                'DATA CACHE',
                 block_size,
-                L2_data_cache or self.main_memory, 
+                L2_data_cache or self.main_memory,
                 **L1_data_CFG)
             
         if L1_code_CFG:
             L1_code_cache = MIPSCache_TEMPLATE(
                 'CODE CACHE',
                 block_size,
-                L2_code_cache or self.main_memory, 
+                L2_code_cache or self.main_memory,
                 **L1_code_CFG)
             
         self.data_access = L1_data_cache or L1_code_cache or self.main_memory
@@ -101,8 +101,8 @@ class MemoryManager(object):
         
         if  (address % size) or (
             not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
-            raise MIPS_Exception('ADDRS', 
-                badaddr = address, 
+            raise MIPS_Exception('ADDRS',
+                badaddr = address,
                 debug_msg = 'Invalid address %08X (%d)' % (address, size))
         
         if  self.vm and self.vm.getAccessMode() == 'user' and not (
@@ -111,7 +111,7 @@ class MemoryManager(object):
             
         if address & ~0x3 in self.devices_memory_map:
             device = self.devices_memory_map[address]
-            return device[address, size]    
+            return device[address, size]
             
         segment = self.main_memory.getSegment(address)
         if 'text' in segment:
@@ -132,15 +132,15 @@ class MemoryManager(object):
         if  (address % size) or (
             not self.MIN_ADDRESS <= address <= self.MAX_ADDRESS):
             
-            raise MIPS_Exception('ADDRS', 
-                badaddr = address, 
+            raise MIPS_Exception('ADDRS',
+                badaddr = address,
                 debug_msg = 'Invalid address %08X (%d)' % (address, size))
         
         if  self.vm and self.vm.getAccessMode() == 'user' and not (
             self.USER_WRITE_SPACE[0] <= address <= self.USER_WRITE_SPACE[1]):
             
-            raise MIPS_Exception('RI', 
-                badaddr = address, 
+            raise MIPS_Exception('RI',
+                badaddr = address,
                 debug_msg = 'Attempted to write in protected space.')
         
         if address & ~0x3 in self.devices_memory_map:
@@ -214,11 +214,11 @@ class MainMemory(object):
         if not self.__contains__(address):
             return 0x0
             
-        block = self.memory[address // self.BLOCK_SIZE] 
+        block = self.memory[address // self.BLOCK_SIZE]
         return block.getData(size, address % self.BLOCK_SIZE)
         
         
-    def __setData(self, address, size, data):       
+    def __setData(self, address, size, data):
         if not self.__contains__(address):
             self.__allocate(address)
             
@@ -256,7 +256,7 @@ class MainMemory(object):
 
         return None
         
-    def getNextFreeBlock(self, address):        
+    def getNextFreeBlock(self, address):
         while address in self:
             block = self.memory[address // self.BLOCK_SIZE]
             if not any(block.contents):
@@ -269,7 +269,7 @@ class MainMemory(object):
     def getInstructionData(self):
         for (address, block) in self.memory.items():
             for (addr_offset, ins) in enumerate(block.contents):
-                if hasattr(ins, '_vm_asm'): 
+                if hasattr(ins, '_vm_asm'):
                     inst_addr = address * self.BLOCK_SIZE + addr_offset * 0x4
                     yield (inst_addr, ins)
     
@@ -300,7 +300,7 @@ class MainMemory(object):
                 output += "\n        %s\n" % current_section.upper()
             
             
-            if 'text' in current_section:           
+            if 'text' in current_section:
                 for i in range(self.BLOCK_SIZE // 4):
                     ins = block.contents[i]
                     if hasattr(ins, '_vm_asm'):
@@ -320,9 +320,9 @@ class MainMemory(object):
                         
                 output += '\n'
                     
-        return output               
+        return output
         
-    def __str__(self):              
+    def __str__(self):
         memContents = "MIPS R2000 Virtual Memory\n"
         memContents += "  * 4GB addressing space\n"
         memContents += "  * %d blocks allocated\n" % len(self.memory)

@@ -166,9 +166,8 @@ NOTE ON CACHE MODES:
         self.writePolicy_miss = writePolicy_miss
         self.replacementPolicy = replacementPolicy
         
-        self.cache = []
-        for i in range(numberOfLines):
-            self.cache.append(CacheLine(self, self.replacementPolicy))
+        self.cache = [CacheLine(self, self.replacementPolicy)\
+                      for i in range(numberOfLines)]
         
     def __str__(self):
         """
@@ -179,7 +178,8 @@ NOTE ON CACHE MODES:
             self.linecount, self.blocksize, self.linecount * self.blocksize)
     
         output += "-".ljust(85, '-') + "\n"
-        output += "|   LINE | VALID | DIRTY |   LABEL  | COUNTER | CONTENTS".ljust(85)
+        output += ("|   LINE | VALID | DIRTY |"
+                   "LABEL  | COUNTER | CONTENTS").ljust(85)
         output += "|\n"
         output += "-".ljust(85, '-') + "\n"
         

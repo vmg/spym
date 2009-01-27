@@ -354,6 +354,10 @@ __start:
     addiu $a2 $a1 4     # envp
     sll $v0 $a0 2
     addu $a2 $a2 $v0
+
+    ori $t0, $0, 0xFF03	# enter user mode, enable interruptions 
+	mtc0 $t0, $12
+    
     jal main
     nop
 
@@ -367,11 +371,11 @@ __eoth:
 def parseInterruptHandlers(handler_list):
     handler_text = \
     r"""
-        .ktext %(int_handler_start)08X  
+        .ktext %(int_handler_start)08X
     """ % {'int_handler_start' : INTERRUPT_HANDLER_ADDR}
     
     label_names = ["0x0", ] * 8
-    for (int_id, htext, hlabel) in handler_list:        
+    for (int_id, htext, hlabel) in handler_list:
         if hlabel not in htext:
             htext = hlabel + ':\n\n' + htext
 
