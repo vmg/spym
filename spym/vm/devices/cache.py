@@ -34,7 +34,6 @@ class CacheLine(object):
         self.counter = 0
         self.start_addr = None
         self.cache = cache_ptr
-        self.memory = cache_ptr.memory
         self.policy = replacementPolicy
         
         # data (we store words here)
@@ -57,13 +56,13 @@ class CacheLine(object):
         self.label = self.cache.getLabel(start_addr)
         
         for i in range(len(self.contents)): self.contents[i] = \
-            self.memory[start_addr + i * 0x4, 4]
+            self.cache.memory[start_addr + i * 0x4, 4]
             
-        if self.policy == 'FIFO': 
+        if self.policy == 'FIFO':
             self.setCounters()
         
     def getContents(self):
-        if self.policy == 'LRU': 
+        if self.policy == 'LRU':
             self.setCounters()
             
         return self.contents
@@ -73,14 +72,14 @@ class CacheLine(object):
         
     def writeBack(self):
         for (offset, word) in enumerate(self.contents):
-            self.memory[self.start_addr + offset * 0x4, 4] = word
+            self.cache.memory[self.start_addr + offset * 0x4, 4] = word
         
-    def writeContents(self, word_in_block, word_desp, size, data):          
+    def writeContents(self, word_in_block, word_desp, size, data):
         word = self.contents[word_in_block]
         word &= ~(BaseCache.SIZE_MASKS[size] << (word_desp * 8))
         word |= ((data & BaseCache.SIZE_MASKS[size]) << (word_desp * 8))
         
-        if self.policy == 'LRU': 
+        if self.policy == 'LRU':
             self.setCounters()
             
         self.contents[word_in_block] = word
@@ -90,8 +89,8 @@ class CacheLine(object):
 class BaseCache(object):
     SIZE_MASKS = [None, 0xFF, 0xFFFF, None, 0xFFFFFFFF]
     
-    def __init__(self, cache_name, memory_ptr, blockSize, 
-                waySize, numberOfLines, writePolicy_hit, 
+    def __init__(self, cache_name, memory_ptr, blockSize,
+                waySize, numberOfLines, writePolicy_hit,
                 writePolicy_miss, replacementPolicy):
         """
 Base cache constructor.
@@ -166,7 +165,7 @@ NOTE ON CACHE MODES:
         self.writePolicy_miss = writePolicy_miss
         self.replacementPolicy = replacementPolicy
         
-        self.cache = [CacheLine(self, self.replacementPolicy)\
+        self.cache = [CacheLine(self, self.replacementPolicy)
                       for i in range(numberOfLines)]
         
     def __str__(self):
@@ -178,8 +177,8 @@ NOTE ON CACHE MODES:
             self.linecount, self.blocksize, self.linecount * self.blocksize)
     
         output += "-".ljust(85, '-') + "\n"
-        output += ("|   LINE | VALID | DIRTY |"
-                   "LABEL  | COUNTER | CONTENTS").ljust(85)
+        output += ("|   LINE | VALID | DIRTY "
+                   "|LABEL  | COUNTER | CONTENTS").ljust(85)
         output += "|\n"
         output += "-".ljust(85, '-') + "\n"
         
@@ -359,12 +358,11 @@ class MIPSCache_TEMPLATE(BaseCache):
     def __init__(self,
                  cacheName,
                  block_size,
-                 memory_ptr,
                  cacheMapping,
-                 numberOfLines, 
-                 sizeOfWay = None, 
-                 writePolicy_hit = 'write-back', 
-                 writePolicy_miss = 'write-allocate', 
+                 numberOfLines,
+                 sizeOfWay = None,
+                 writePolicy_hit = 'write-back',
+                 writePolicy_miss = 'write-allocate',
                  replacementPolicy = 'FIFO'):
                 
         if cacheMapping is 'direct':
@@ -372,8 +370,8 @@ class MIPSCache_TEMPLATE(BaseCache):
         elif cacheMapping is 'associative':
             sizeOfWay = numberOfLines
             
-        BaseCache.__init__(self, 
-            cacheName, memory_ptr, block_size, 
-            sizeOfWay, numberOfLines, 
-            writePolicy_hit, writePolicy_miss, 
+        BaseCache.__init__(self,
+            cacheName, None, block_size,
+            sizeOfWay, numberOfLines,
+            writePolicy_hit, writePolicy_miss,
             replacementPolicy)

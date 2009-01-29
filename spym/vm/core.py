@@ -28,6 +28,9 @@ import os.path, time, sys, pdb
 from spym.vm.exceptions import *
 from spym.common.utils import _debug, buildLineOfCode, bin
 
+from spym.vm.devices import TerminalScreen, TerminalKeyboard, CPUClock_TIMER
+
+
 class VirtualMachine(object):
     
     SCREEN = 'screen'
@@ -52,49 +55,64 @@ class VirtualMachine(object):
         'OVF'   : 12,   # overflow
     }
 
-    DEFAULT_CACHE_CFG = (
-        {   # LEVEL 1 Data Cache    
+    DEFAULT_CACHE_CFG = {
+        'L1_data' :
+        {
             'cacheMapping' : 'direct',
             'numberOfLines' : 1024, # 1024 lines = 32KB of data
-            },
+        },
+
+        'L1_code' :
         {   # LEVEL 1 Code Cache    
             'cacheMapping' : 'direct',
             'numberOfLines' : 2048, # 2048 lines = 64KB of code
-            },
-        )
+        },
+    }
+
+    DEFAULT_DEVICES_CFG = {
+        'screen' : TerminalScreen,
+        'keyboard' : TerminalKeyboard,
+        'clock' : CPUClock_TIMER,
+    }
     
     class RuntimeVMException(Exception): pass
     class ConfigVMException(Exception): pass
     
     def __init__(self,
-                 assembly,
-                 defaultMemoryMappedIO = False,
-                 memoryMappedDevices = {},
-                 virtualSyscalls = True,
-                 enableExceptions = False,
-                 loadAsBuffer = False,
-                 enablePseudoInsts = True,
-                 memoryBlockSize = 32,
-                 verboseSteps = False,
-                 debugPoints = [],
-                 standardInput = None,
-                 standardOutput = None,
-                 enableDelaySlot = True,
-                 useDefaultCacheCfg = True,
-                 cacheLevel1 = {},
-                 cacheLevel2 = {}):
+                    memoryBlockSize = 32,
+                    verboseSteps = False,
+                    debugPoints = None,
                     
-        self.enablePseudoInsts = enablePseudoInsts
+                    standardInput = None,
+                    standardOutput = None,
+                    
+                    enableDelaySlot = True,
+                    enablePseudoInsts = True,
+                    virtualSyscalls = True,
+
+                    enableExceptions = True,
+                    exceptionsFile = None,
+
+                    enableCache = True,
+                    cacheConfiguration = DEFAULT_CACHE_CFG,
+                    
+                    enableDevices = True,
+                    memoryMappedDevices = DEFAULT_DEVICES_CFG):
+
         self.memoryBlockSize = memoryBlockSize
-        self.assembly = assembly
-        self.loadAsBuffer = loadAsBuffer
         self.verboseSteps = verboseSteps
+        self.debugPoints = debugPoints or []
+
         self.deviceInformation = memoryMappedDevices
-        self.virtualSyscalls = virtualSyscalls
-        self.defaultMemoryMappedIO = defaultMemoryMappedIO
-        self.debugPoints = debugPoints
+        self.cacheInformation = cacheConfiguration
+
         self.enableDelaySlot = enableDelaySlot
+        self.enablePseudoInsts = enablePseudoInsts
+        self.virtualSyscalls = virtualSyscalls
+        
         self.enableExceptions = enableExceptions
+        self.enableCache = enableCache
+        self.enableDevices = enableDevices
 
         self.breakpointed = False
         self.started = False
@@ -102,35 +120,14 @@ class VirtualMachine(object):
         self.currentLine = None
         self.running = False
         
-        if useDefaultCacheCfg:
-            self.cacheLevel1 = self.DEFAULT_CACHE_CFG
-            self.cacheLevel2 = {}
-        else:
-            self.cacheLevel1 = cacheLevel1
-            self.cacheLevel2 = cacheLevel2
-        
         self.stdout = standardOutput or sys.stdout
         self.stdin = standardInput or sys.stdin
-        
-        if defaultMemoryMappedIO:
-            from spym.vm.devices import TerminalScreen, TerminalKeyboard
-            self.deviceInformation[self.SCREEN] = TerminalScreen
-            self.deviceInformation[self.KEYBOARD] = TerminalKeyboard
-            
-        if self.CLOCK not in self.deviceInformation:
-            from spym.vm.devices import CPUClock_TIMER
-            self.deviceInformation[self.CLOCK] = CPUClock_TIMER
 
-        if defaultMemoryMappedIO and virtualSyscalls:
-            raise self.ConfigVMException(
-                "Cannot virtualize I/O syscalls when memory mapped I/O\
-                 is enabled.")
-        
-        self.__initialize()
+        self.loadedFiles = []
         
     def __syscallVirtualization(self):
         # v0 should contain the code for the syscall
-        syscall_code = self.regBank[2] 
+        syscall_code = self.regBank[2]
         
         if syscall_code == 1:
             self.stdout.write(str(self.regBank[4]))
@@ -176,7 +173,7 @@ class VirtualMachine(object):
             
         # hack: stdout gets clogged with the charspam, 
         # flush it after each syscall
-        self.stdout.flush() 
+        self.stdout.flush()
                 
     def __runDevices(self):
         for device in self.devices_list:
@@ -185,7 +182,7 @@ class VirtualMachine(object):
     def __runInstruction(self, instruction):
         if not hasattr(instruction, '_vm_asm'):
             raise self.RuntimeVMException(
-                "Attempted to execute non-instruction at 0x%08X\n" % 
+                "Attempted to execute non-instruction at 0x%08X\n" %
                 self.regBank.PC)
             
         instruction._vm_asm(self.regBank)
@@ -200,10 +197,10 @@ class VirtualMachine(object):
                 instruction = self.memory[self.regBank.PC, 4]
                 
                 # if the instruction does have a delay, and delay slots
+                # are enabled, we need to handle it...
                 if (hasattr(instruction, '_delay')
                     and instruction._delay
                     and self.enableDelaySlot):
-                # are enabled, we need to handle it...
                     
                     # what we are doing is fetching the instruction AFTER the 
                     # current one (the one which should go into the delay 
@@ -254,18 +251,26 @@ class VirtualMachine(object):
         
         return 1 if self.breakpointed else 0
             
-    def run(self):
+    def run(self, start_address = None):
         if self.started or self.breakpointed:
             raise self.RuntimeVMException(
                 "Reset the Virtual Machine before running again the program.")
             
-        if not '__start' in self.parser.global_labels:
-            raise self.RuntimeVMException(
-                "Cannot find global '__start' label.")
-            
-        # load PC with the default start
-        self.regBank.PC = self.parser.global_labels['__start'] 
-           
+        # init the VM, load all the files.
+        self.__initialize()
+
+        if start_address is None:
+            if not '__start' in self.parser.global_labels:
+                raise self.RuntimeVMException(
+                    "Cannot find global '__start' label.")
+                
+            # load PC with the default start
+            self.regBank.PC = self.parser.global_labels['__start']
+
+        else:
+            # load the supplied start address
+            self.regBank.PC = start_address
+               
         # clock ticks until next interrupt
         self.regBank.CP0.Compare = 1500 
         
@@ -276,7 +281,6 @@ class VirtualMachine(object):
         self.running = True
         self.breakpointed = False
         
-        self.cpu_timer = time.clock()
         self.__vm_loop()
         
         return 1 if self.breakpointed else 0    
@@ -354,7 +358,10 @@ class VirtualMachine(object):
     def __initialize(self):
         # core elements
         from spym.vm.memory import MemoryManager
-        self.memory = MemoryManager(self, self.memoryBlockSize, self.cacheLevel1, self.cacheLevel2)
+        self.memory = MemoryManager(self,
+                        self.memoryBlockSize,
+                        self.enableCache,
+                        self.cacheInformation)
         
         from spym.vm.assembler import AssemblyParser
         self.parser = AssemblyParser(self.memory, self.enablePseudoInsts)
@@ -394,8 +401,8 @@ class VirtualMachine(object):
                 hasattr(device_instance, '_interrupt_handler_label')):
                 interrupt_handlers.append(
                     (
-                        len(self.devices_list), 
-                        device_instance._interrupt_handler, 
+                        len(self.devices_list),
+                        device_instance._interrupt_handler,
                         device_instance._interrupt_handler_label
                     ))
             
@@ -405,12 +412,12 @@ class VirtualMachine(object):
                 device_kb = device_instance
             elif device_name == self.SCREEN:
                 device_scr = device_instance
-            
-        if not self.virtualSyscalls and (not device_kb or not device_scr):
-            raise self.ConfigVMException(
-                """Virtualized syscalls are disabled but there 
-                are no memory-mapped devices able to emulate their 
-                implementation.""")
+        
+        if not self.virtualSyscalls and (not device_kb and not device_scr):
+            self.virtualSyscalls = True
+
+        if self.virtualSyscalls and (device_kb or device_scr):
+            self.virtualSyscalls = False
         
         # assembly loading / parsing
         if self.enableExceptions:
@@ -427,15 +434,19 @@ class VirtualMachine(object):
                     interrupt_handlers)
                 
             self.parser.parseBuffer(ktext)
-        
-        if self.loadAsBuffer:
-            self.parser.parseBuffer(self.assembly)
-        else:
-			for asm in self.assembly:
-				self.parser.parseFile(asm)
+   
+        for (asm_file, load_as_buffer) in self.loadedFiles:
+            if load_as_buffer:
+                self.parser.parseBuffer(asm_file)
+            else:
+                self.parser.parseFile(asm_file)
         
         self.parser.resolveGlobalDependencies()
-        
+
+
+    def load(self, asm_file, load_as_buffer = False):
+        self.loadedFiles.append((asm_file, load_as_buffer))
+
     def reset(self):
         del(self.parser)
         del(self.memory)
@@ -444,7 +455,6 @@ class VirtualMachine(object):
         
         self.started = False
         self.breakpointed = False
-        self.__initialize()
         
     def debugPrintAll(self, labels = True, memory = True, regbank = True):
         if memory:

@@ -22,7 +22,10 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 """""
+import collections
+
 from spym.common.utils import buildLineOfCode
+from spym.vm.core import VirtualMachine
 from spym.vm.exceptions import MIPS_Exception
 from spym.vm.devices.cache import MIPSCache_TEMPLATE
 
@@ -31,66 +34,54 @@ class MemoryManager(object):
     USER_WRITE_SPACE    = (0x10000000, 0x7FFFFFFF)
     MIN_ADDRESS =       0x00000000
     MAX_ADDRESS =       0xFFFFFFFF
+
+    CACHE_PARENTS = {
+        'L1' :      ['L2', 'memory'],
+        'L1_code' : ['L2_code', 'L2', 'memory'],
+        'L1_data' : ['L2_data', 'L2', 'memory'],
+        'L2' :      ['memory'],
+        'L2_data' : ['memory'],
+        'L2_code' : ['memory'],
+    }
+
+    CODE_FALLBACKS = ['L1_code', 'L1', 'memory']
+    DATA_FALLBACKS = ['L1_data', 'L2', 'memory']
     
-    def __init__(self, vm_ptr, block_size, L1_cache_CFG = {}, L2_cache_CFG = {}):
+    def __init__(self, vm_ptr, block_size, enable_cache, cache_CFG):
         self.vm = vm_ptr
-        self.main_memory = MainMemory(vm_ptr, 32) # default block size, 8 words
+        self.main_memory = MainMemory(vm_ptr, block_size)
+
         self.devices_memory_map = {}
-        
-        L1_data_cache = None
-        L1_code_cache = None
-        L2_data_cache = None
-        L2_code_cache = None
-        
-        if isinstance(L1_cache_CFG, tuple):
-            L1_data_CFG, L1_code_CFG = L1_cache_CFG
-        else:
-            L1_data_CFG, L1_code_CFG = L1_cache_CFG, None
-        
-        if isinstance(L2_cache_CFG, tuple):
-            L2_data_CFG, L2_code_CFG = L2_cache_CFG
-        else:
-            L2_data_CFG, L2_code_CFG = L2_cache_CFG, None
-            
-        if L2_data_CFG:
-            L2_data_cache = MIPSCache_TEMPLATE(
-                'LVL2 CACHE',
-                block_size,
-                self.main_memory,
-                **L2_data_CFG)
-        
-        if L2_code_CFG:
-            L2_code_cache = MIPSCache_TEMPLATE(
-                'LVL2 CACHE',
-                block_size,
-                self.main_memory,
-                **L2_code_CFG)
-            
-        L2_code_cache = L2_code_cache or L2_data_cache
-        L2_data_cache = L2_data_cache or L2_code_cache
-        
-        if (L2_data_cache) and not (L1_code_CFG or L1_data_CFG):
-            raise Exception(
-                """
-                Cannot instantiate Level 2 caches if Level 1 are not present.
-                """)
-            
-        if L1_data_CFG:
-            L1_data_cache = MIPSCache_TEMPLATE(
-                'DATA CACHE',
-                block_size,
-                L2_data_cache or self.main_memory,
-                **L1_data_CFG)
-            
-        if L1_code_CFG:
-            L1_code_cache = MIPSCache_TEMPLATE(
-                'CODE CACHE',
-                block_size,
-                L2_code_cache or self.main_memory,
-                **L1_code_CFG)
-            
-        self.data_access = L1_data_cache or L1_code_cache or self.main_memory
-        self.code_access = L1_code_cache or L1_data_cache or self.main_memory
+        self.memory_modules = {'memory' : self.main_memory}
+       
+        if enable_cache:
+            for (cache_name, cache_data) in cache_CFG.items():
+                if cache_name not in self.CACHE_PARENTS.keys():
+                    raise VirtualMachine.ConfigVMException(
+                        "Invalid Cache identifier name.")
+
+                self.memory_modules[cache_name] = \
+                    MIPSCache_TEMPLATE(cache_name, block_size, **cache_data)
+
+
+        for (cache_name, cache_instance) in self.memory_modules.items():
+            if cache_name == 'memory':
+                continue
+
+            for p in self.CACHE_PARENTS[cache_name]:
+                if p in self.memory_modules.keys():
+                    cache_instance.memory = self.memory_modules[p]
+                    break
+           
+        for fb in self.CODE_FALLBACKS:
+            if fb in self.memory_modules.keys():
+                self.code_access = self.memory_modules[fb]
+                break
+
+        for fb in self.DATA_FALLBACKS:
+            if fb in self.memory_modules.keys():
+                self.data_access = self.memory_modules[fb]
+                break
     
     def __getitem__(self, address):
         if isinstance(address, tuple):
@@ -158,7 +149,7 @@ class MemoryManager(object):
 
 class MainMemory(object):
     SEGMENT_DATA = {
-        'krnel_data_bottom':(0x00000000, 0x00400000 - 1),
+        'kernel_data_bt' :  (0x00000000, 0x00400000 - 1),
         'user_text' :       (0x00400000, 0x10000000 - 1),
         'user_data' :       (0x10000000, 0x80000000 - 1),
         'kernel_text' :     (0x80000000, 0x90000000 - 1),
