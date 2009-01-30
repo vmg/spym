@@ -57,7 +57,8 @@ class AssemblyParser(object):
         
     def __checkLabel(self, label):
         if label in self.labels:
-            raise self.ParserException("Redefinition of label '%s'." % label)
+            raise self.ParserException(
+                "Redefinition of label '%s'." % label)
         
         if not re.match(r'^[^\d]\w+$', label):
             raise self.ParserException("Malformed label.")
@@ -73,7 +74,8 @@ class AssemblyParser(object):
             self.__parse(filename, asm_file)
             
     def parseBuffer(self, buff):
-        self.__parse("_asm_buffer%02d" % self.parsedFiles, buff.split('\n'))
+        self.__parse("_asm_buffer%02d" %
+                self.parsedFiles, buff.split('\n'))
         
     def __parse(self, namespace, asm_contents):
         self.local_labels = {}
@@ -94,15 +96,18 @@ class AssemblyParser(object):
                     if identifier[0] == '.':
                         old_line_start = self.cur_address
                         
-                        new_line_start, self.cur_address = self.preprocessor(
-                            identifier, args, self.cur_address)
+                        new_line_start, self.cur_address = \
+                            self.preprocessor(
+                                identifier, args, self.cur_address)
                         
                         for (l, a) in self.local_labels.items():
                             if a == old_line_start:
                                 self.local_labels[l] = new_line_start
 
                     else:
-                        inst_code = self.instruction_assembler(identifier, args)
+                        inst_code = self.instruction_assembler(
+                                identifier, args)
+
                         if not isinstance(inst_code, list):
                             inst_code = [inst_code, ]
 
@@ -152,7 +157,7 @@ class AssemblyParser(object):
                 
                 if hasattr(new_instruction, '_inst_bld_tmp'):
                     raise self.ParserException(
-                        "Cannot resolve label in instruction '%s' @ %08X" % (
+                        "Cannot resolve label in instruction %s @ %08X" % (
                             str(instruction._inst_bld_tmp), inst_address))
                     
                 self.memory[inst_address, 4] = new_instruction
@@ -166,7 +171,9 @@ class AssemblyParser(object):
         
         assign_re = re.match(r'(\w+)\s*=\s*(0x\d+|\d+)', line)
         if assign_re:
-            self.global_variables[assign_re.group(1)] = int(assign_re.group(2), 0)
+            self.global_variables[assign_re.group(1)] = \
+                int(assign_re.group(2), 0)
+
             return (None, None, None)
         
         if ':' in line:
@@ -183,7 +190,8 @@ class AssemblyParser(object):
                 if line_id == '.ascii' or line_id == '.asciiz':
                     line_args = [line_tokens[1].strip(), ]
                 else:
-                    line_args = re.split(self.TOKENIZER_REGEX, line_tokens[1])
+                    line_args = re.split(
+                        self.TOKENIZER_REGEX, line_tokens[1])
         
         return (line_label, line_id, line_args)
         

@@ -349,6 +349,8 @@ ret_restoreall:
     .text
     .globl __start
 __start:
+    li $sp, 0x7FFFFFF4  # start of stack pointer
+
     lw $a0 0($sp)       # argc
     addiu $a1 $sp 4     # argv
     addiu $a2 $a1 4     # envp
@@ -385,31 +387,36 @@ def parseInterruptHandlers(handler_list):
     int_handler_addresses = ".word " + ", ".join(label_names)
     return handler_text, int_handler_addresses
 
-def getKernelText(exception_handler = True, 
-                syscall_handler = True, 
-                interrupt_handlers = [], 
-                memmap_screen = 0x0, 
+def getKernelText(exception_handler = True,
+                syscall_handler = True,
+                interrupt_handlers = [],
+                memmap_screen = 0x0,
                 memmap_keyboard = 0x0):
                 
     kernel_text = ""
     int_handler_addresses = ""
     
     if interrupt_handlers:
-        handler_text, int_handler_addresses = parseInterruptHandlers(interrupt_handlers)
+        handler_text, int_handler_addresses = \
+                parseInterruptHandlers(interrupt_handlers)
+
         kernel_text += handler_text
     
     if exception_handler:
         kernel_text += EXCEPTION_HANDLER % {
             'exception_handler_address' : EXCEPTION_HANDLER_ADDR,
             'syscall_handler_address' : SYSCALL_HANDLER_ADDR,
-            'syscall_jump_label' : 'syscall_handler' if syscall_handler else 'unhandled_exception',
+            'syscall_jump_label' :
+                ('syscall_handler' if syscall_handler else 
+                 'unhandled_exception'),
+                
             'int_handler_addresses' : int_handler_addresses,
         }
 
     if syscall_handler:
         kernel_text += SYSCALL_HANDLER % {
             'syscall_handler_address' : SYSCALL_HANDLER_ADDR,
-            'memmap_io_SCREEN' : memmap_screen, 
+            'memmap_io_SCREEN' : memmap_screen,
             'memmap_io_KEYBOARD' : memmap_keyboard
         }
         

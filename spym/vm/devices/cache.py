@@ -115,8 +115,8 @@ Base cache constructor.
         Resolution policy for writing a 'hit' on the cache.
         
         - 'write-back': 
-            Data is written on the cache line, and then copied to memory when 
-            such line is replaced.
+            Data is written on the cache line, and then copied 
+            to memory when such line is replaced.
             
         - 'write-through': 
             Data is written both in the cache line and in memory 
@@ -173,7 +173,7 @@ NOTE ON CACHE MODES:
         Build a visual representation of the cache's contents to use with 
         str() methods.
         """
-        output = "[%s] - %d lines, %d bytes/block (%d bytes of storage)\n" % (
+        output = "[%s] - %d lines, %d bytes/block (%dB of storage)\n" % (
             self.linecount, self.blocksize, self.linecount * self.blocksize)
     
         output += "-".ljust(85, '-') + "\n"
@@ -187,7 +187,8 @@ NOTE ON CACHE MODES:
             data.reverse()
             label, valid_bit, dirty_bit, counter = line.control()
             
-            if line_co and self.set_size > 1 and not line_co % self.set_size:
+            if (line_co and self.set_size > 1 and not 
+                line_co % self.set_size):
                 output += "-".ljust(85, '-') + "\n"
                 
             output += "| %6d | %5d | %5d | %8X | %7d | " % (
@@ -211,8 +212,8 @@ NOTE ON CACHE MODES:
         
             block: Memory block, straight from a cache line.
             
-            address: Address used to obtain such block (i.e. pointing to one 
-            of the words inside the block)
+            address: Address used to obtain such block (i.e. 
+                pointing to one of the words inside the block)
             
             size: Byte size of the data to extract (1, 2 or 4 for byte, 
             half or word).
@@ -234,8 +235,8 @@ NOTE ON CACHE MODES:
         Brings a memory block from main memory and stores it in its 
         corresponding cache line.
             
-            address: Address to bring (may be unaligned, the cache will load
-            the whole block containing the address)
+            address: Address to bring (may be unaligned, the cache will 
+            load the whole block containing the address)
             
             Returns: The contents of the new block.
         """
@@ -255,8 +256,8 @@ NOTE ON CACHE MODES:
         are available, the selected replacement algorithm will drop one for 
         use anyway.
             
-            address: The address of the block which needs to be placed inside 
-            the line.
+            address: The address of the block which needs 
+            to be placed inside the line.
             
             Returns: A reference to the CacheLine object which may be used
             for the storage of a new block.
@@ -327,8 +328,8 @@ NOTE ON CACHE MODES:
                 dest_line = self.findLineForAddress(address)
                 
                 self.cache[dest_line].writeContents(
-                    word_in_block, 
-                    address % 4, 
+                    word_in_block,
+                    address % 4,
                     size, data)
 
             elif self.writePolicy_miss == 'write-noallocate':
@@ -337,22 +338,23 @@ NOTE ON CACHE MODES:
         else:
             # always write on cache
             self.cache[dest_line].writeContents(
-                word_in_block, 
-                address % 4, 
+                word_in_block,
+                address % 4,
                 size, data)
             
-            # if this is write-through, write on memory, otherwise wait until 
+            # if this is write-through, write on memory, 
+            # otherwise wait until 
             # removal for writing
             if self.writePolicy_hit == 'write-through':
                 self.memory[address, size] = data
         
-    def __getitem__(self, address_tuple):       
+    def __getitem__(self, address_tuple):
         address, size = address_tuple
         return self.getData(address, size)
 
-    def __setitem__(self, address_tuple, data):     
+    def __setitem__(self, address_tuple, data):
         address, size = address_tuple
-        self.setData(address, size, data)       
+        self.setData(address, size, data)
         
 class MIPSCache_TEMPLATE(BaseCache):
     def __init__(self,

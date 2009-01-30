@@ -202,21 +202,24 @@ class VirtualMachine(object):
                     and instruction._delay
                     and self.enableDelaySlot):
                     
-                    # what we are doing is fetching the instruction AFTER the 
+                    # we fetch the instruction AFTER the
                     # current one (the one which should go into the delay 
-                    # slot) and executing it first...
+                    # slot) and execute it first...
                     did_delay_slot = True
                     delay_slot = self.memory[self.regBank.PC + 0x4, 4]
                     
                     if self.verboseSteps:
                         _debug('[DELAYED BR]\n' +
-                            buildLineOfCode(self.regBank.PC + 0x4, delay_slot))
+                            buildLineOfCode(
+                                self.regBank.PC + 0x4,
+                                delay_slot))
                     
-                    # if an exception is raised when executing the instruction
-                    # in the delay slot, we handle it like it was caused in 
-                    # the jump, then the handler should set the PC to execute 
+                    # if an exception is raised when executing the 
+                    # instruction in the delay slot, we handle it like 
+                    # it was caused in the jump, then the handler 
+                    # should set the PC to execute 
                     # the delay slot again hence we increase the PC to skip 
-                    # the delay slot, and continue the execution.
+                    # the slot, and continue the execution.
                     try: self.__runInstruction(delay_slot)
                     except MIPS_Exception as cur_exception:
                         self.processException(cur_exception)
@@ -253,8 +256,7 @@ class VirtualMachine(object):
             
     def run(self, start_address = None):
         if self.started or self.breakpointed:
-            raise self.RuntimeVMException(
-                "Reset the Virtual Machine before running again the program.")
+            self.reset()
             
         # init the VM, load all the files.
         self.__initialize()
@@ -270,12 +272,6 @@ class VirtualMachine(object):
         else:
             # load the supplied start address
             self.regBank.PC = start_address
-               
-        # clock ticks until next interrupt
-        self.regBank.CP0.Compare = 1500 
-        
-        # stack pointer -- set a tad lower to fake argc and argv
-        self.regBank[29] = 0x80000000 - 0xC 
         
         self.started = True
         self.running = True
