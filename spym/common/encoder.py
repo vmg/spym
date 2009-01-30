@@ -29,9 +29,9 @@ from spym.common.utils import *
 if (sys.version_info) >= (3, 0):
     from spym.common.meminst_30 import MemoryInstruction
 else:
-    from spym.common.meminst_26 import MemoryInstruction                                
+    from spym.common.meminst_26 import MemoryInstruction
 
-class InstructionEncoder(object):   
+class InstructionEncoder(object):
     class EncodingError(Exception):
         pass
         
@@ -50,8 +50,10 @@ class InstructionEncoder(object):
     def encodeBinary(self, encoding, opcode, funcode, s, t, d, shift, imm):
         if encoding == 'R':
             str_encoding = self.__encode_R(opcode, s, t, d, shift, funcode)
+
         elif encoding == 'I':
             str_encoding = self.__encode_I(opcode, s, t, imm)
+
         elif encoding == 'J':
             str_encoding = self.__encode_J(opcode, imm)
             
@@ -70,22 +72,43 @@ class InstructionEncoder(object):
             imm = (imm << 2)
             label_repl = r'0x%(imm)08X [%(label)s]'
         
-        syntax = syntax.replace('imm', r'%(imm)d').replace('label', label_repl)
-        syntax = syntax.replace('$d', r'$%(d)d').replace('$s', r'$%(s)d').replace('$t', r'$%(t)d')
-        syntax = syntax.replace('shift', r'%(a)d')
-        return ins_name.lower() + " " + syntax % {'s' : s, 't' : t, 'd' : d, 'a' : a, 'imm' : imm, 'label' : label}
+        syntax = syntax.replace('label',    label_repl  )
+        syntax = syntax.replace('imm',      r'%(imm)d'  )
+        syntax = syntax.replace('$d',       r'$%(d)d'   )
+        syntax = syntax.replace('$s',       r'$%(s)d'   )
+        syntax = syntax.replace('$t',       r'$%(t)d'   )
+        syntax = syntax.replace('shift',    r'%(a)d'    )
+
+        return ins_name.lower() + " " + syntax % {
+                's'     : s,
+                't'     : t,
+                'd'     : d,
+                'a'     : a,
+                'imm'   : imm,
+                'label' : label
+            }
         
     def tmpEncoding(self, ins_closure, data_tuple):
         mem_inst = MemoryInstruction(0xDEAD)
         mem_inst._vm_asm = ins_closure
         setattr(mem_inst, '_inst_bld_tmp', data_tuple)
-        return mem_inst 
+        return mem_inst
         
-    def __call__(self, ins_closure, ins_name, s = 0, t = 0, d = 0, shift = 0, imm = 0, label = "", do_delay = False, label_address = 0x0):
-        encoding, _, opcode, funcode, syntax = self.builder.asm_metadata['ins_' + ins_name]
+    def __call__(self, ins_closure,ins_name,
+            s = 0, t = 0, d = 0,
+            shift = 0, imm = 0,
+            label = "",
+            do_delay = False,
+            label_address = 0x0):
+
+        encoding, _, opcode, funcode, syntax = \
+                self.builder.asm_metadata['ins_' + ins_name]
         
-        binary_encoding = self.encodeBinary(encoding, opcode, funcode, s, t, d, shift, imm)
-        text_encoding = self.encodeText(ins_name, encoding, syntax, s, t, d, shift, imm, label)
+        binary_encoding = self.encodeBinary(
+                encoding, opcode, funcode, s, t, d, shift, imm)
+
+        text_encoding = self.encodeText(
+                ins_name, encoding, syntax, s, t, d, shift, imm, label)
 
         mem_inst = MemoryInstruction(binary_encoding)
         mem_inst._vm_asm = ins_closure
