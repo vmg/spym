@@ -26,7 +26,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 import sys
 from spym.common.utils import *
 
-if (sys.version_info) >= (3, 0):    
+if (sys.version_info) >= (3, 0):
     from spym.common.meminst_30 import MemoryInstruction
 else:
     from spym.common.meminst_26 import MemoryInstruction                                
